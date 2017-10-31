@@ -32,6 +32,7 @@ var JSProxyModel = widgets.DOMWidgetModel.extend({
 // Custom View. Renders the widget model.
 var JSProxyView = widgets.DOMWidgetView.extend({
     render: function() {
+        this.el.textContent = "JSProxyView rendered"
         //this.value_changed();
         //this.model.on('change:value', this.value_changed, this);
     },
@@ -43,6 +44,6 @@ var JSProxyView = widgets.DOMWidgetView.extend({
 
 
 module.exports = {
-    JSProxyModel : HelloModel,
-    JSProxyView : HelloView
+    JSProxyModel : JSProxyModel,
+    JSProxyView : JSProxyView
 };
