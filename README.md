@@ -27,8 +27,4 @@ to remove all build artifacts from a development tree (after changing the javasc
     $ jupyter nbextension install --py --symlink --sys-prefix jp_proxy_widget
     $ jupyter nbextension enable --py --sys-prefix jp_proxy_widget
 
-Use
 
-    $ git clean
-
-to remove all build artifacts from a development tree (after changing the javascript).
