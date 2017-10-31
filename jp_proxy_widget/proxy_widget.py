@@ -120,7 +120,7 @@ import types
 
 # In the IPython context get_ipython is a builtin.
 # get a reference to the IPython notebook object.
-#ip = IPython.get_ipython()
+ip = IPython.get_ipython()
 
 JAVASCRIPT_EMBEDDING_TEMPLATE = u"""
 (function () {{
@@ -165,7 +165,7 @@ JAVASCRIPT_EMBEDDING_TEMPLATE + """
 """)
 
 # For creating unique DOM identities for embedded objects
-IDENTITY_COUNTER = [int(t
+IDENTITY_COUNTER = [int(time.time()) % 10000000]
 
 @widgets.register
 class JSProxyWidget(widgets.DOMWidget):
@@ -189,7 +189,7 @@ class JSProxyWidget(widgets.DOMWidget):
     verbose = False
 
     def __init__(self, *pargs, **kwargs):
-        super(ProxyWidget, self).__init__(*pargs, **kwargs)
+        super(JSProxyWidget, self).__init__(*pargs, **kwargs)
         self.counter = 0
         self.count_to_results_callback = {}
         self.default_event_callback = None
@@ -352,8 +352,8 @@ class JSProxyWidget(widgets.DOMWidget):
         count = self.counter
         self.counter = count + 1
         command = CallMaker("callback", count, data, level)
-        if delay:
-            callback_function = delay_in_thread(callback_function)
+        #if delay:
+        #    callback_function = delay_in_thread(callback_function)
         self.identifier_to_callback[count] = callback_function
         return command
 
