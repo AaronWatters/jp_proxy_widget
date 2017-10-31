@@ -19,7 +19,7 @@ For a development installation (requires npm),
 
 Then optionally if you want a clean build use
 
-    $ git clean
+    $ git clean -f -d
 
 to remove all build artifacts from a development tree (after changing the javascript).
 

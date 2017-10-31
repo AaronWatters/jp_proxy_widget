@@ -21,8 +21,8 @@ var JSProxyModel = widgets.DOMWidgetModel.extend({
     defaults: _.extend(widgets.DOMWidgetModel.prototype.defaults(), {
         _model_name : 'JSProxyModel',
         _view_name : 'JSProxyView',
-        _model_module : 'proxy_implementation',
-        _view_module : 'proxy_implementation',
+        _model_module : 'jp_proxy_widget',
+        _view_module : 'jp_proxy_widget',
         _model_module_version : '0.1.0',
         _view_module_version : '0.1.0'
     })
