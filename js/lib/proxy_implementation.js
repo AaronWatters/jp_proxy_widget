@@ -39,8 +39,8 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             that.update();
         });
 
-        that.model.on("msg:custom", function() {
-            that.custom_message(arguments);
+        that.model.on("msg:custom", function(content, buffers, widget) {
+            that.handle_custom_message(content, buffers, widget);
         })
         // Wrap $el as a proper jQuery object
         that.$$el = $(that.$el);
@@ -58,17 +58,25 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             debugger;
             that.model.widget_manager.keyboard_manager.register_events(element);
         };
+
+        that.model.set("rendered", true);
+        that.touch();
     },
 
     update: function(options) {
         var that = this;
         var commands = that.model.get("commands");
-        if (commands.length >= 2) {
+        return that.execute_commands(commands);
+    },
+
+    execute_commands: function(commands) {
+        var that = this;
+        var results = [];
+        if (commands && commands.length >= 2) {
             var command_counter = commands[0];
             var command_list = commands[1];
             var level = commands[2];
             level = that.check_level(level);
-            var results = [];
             try {
                 _.each(command_list, function(command,i) {
                     var result = that.execute_command(command);
@@ -80,15 +88,22 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             that.model.set("commands", []);
             that.model.set("results", [command_counter, results])
             that.touch();
+        } else {
+            results.push("no commands sent?");
         }
+        return results;
     },
 
-    custom_message: function(args) {
+    handle_custom_message: function(content, buffers, widget) {
         var that = this;
         debugger;
-        console.log("args=" + args);
+        var indicator = content["indicator"];
+        var payload = content["payload"];
+        if (indicator == "commands") {
+            that.execute_commands(payload);
+        }
         // send it back again
-        that.model.send(args);
+        //that.model.send(args);
     },
 
     execute_command: function(command) {

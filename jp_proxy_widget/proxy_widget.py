@@ -178,7 +178,10 @@ class JSProxyWidget(widgets.DOMWidget):
     _model_module_version = Unicode('^0.1.0').tag(sync=True)
 
     # traitlet port to use for sending commends to javascript
-    commands = traitlets.List([], sync=True)
+    #commands = traitlets.List([], sync=True)
+
+    # Rendered flag sent by JS view after render is complete.
+    rendered = traitlets.Bool(False, sync=True)
 
     # traitlet port to receive results of commands from javascript
     results = traitlets.List([], sync=True)
@@ -197,9 +200,24 @@ class JSProxyWidget(widgets.DOMWidget):
         #self.callback_to_identifier = {}
         self.on_trait_change(self.handle_callback_results, "callback_results")
         self.on_trait_change(self.handle_results, "results")
-        print "registered on_msg(handle_custom_message)"
+        self.on_trait_change(self.handle_rendered, "rendered")
+        #print "registered on_msg(handle_custom_message)"
         self.on_msg(self.handle_custom_message)
         self.buffered_commands = []
+        self.commands_awaiting_render = []
+        self.last_commands_sent = []
+
+    def handle_rendered(self, att_name, old, new):
+        "when rendered send any commands awaiting the render event."
+        if self.commands_awaiting_render:
+            self.send_commands([])
+
+    def send_custom_message(self, indicator, payload):
+        package = { 
+            "indicator": indicator,
+            "payload": payload,
+        }
+        self.send(package)
 
     def handle_custom_message(self, widget, data, *etcetera):
         self._last_message_data = data
@@ -319,13 +337,25 @@ class JSProxyWidget(widgets.DOMWidget):
         self.counter = count + 1
         qcommands = list(map(quoteIfNeeded, commands_iter))
         commands = validate_commands(qcommands)
-        payload = [count, commands, level]
-        if results_callback is not None:
-            self.identifier_to_callback[count] = results_callback
-        # send the command using the commands traitlet which is mirrored to javascript.
-        self.commands = payload
-        return payload
-
+        if self.rendered:
+            # also send any commands awaiting the render event.
+            if self.commands_awaiting_render:
+                commands = commands + self.commands_awaiting_render
+                self.commands_awaiting_render = None
+            payload = [count, commands, level]
+            if results_callback is not None:
+                self.identifier_to_callback[count] = results_callback
+            # send the command using the commands traitlet which is mirrored to javascript.
+            #self.commands = payload
+            self.send_custom_message("commands", payload)
+            self.last_commands_sent = payload
+            return payload
+        else:
+            # wait for render event before sending commands.
+            print "waiting for render!", commands
+            self.commands_awaiting_render.extend(commands)
+            return ("awaiting render", commands)
+    
     def evaluate(self, command, level=1, timeout=3000):
         "Send one command and wait for result.  Return result."
         results = self.evaluate_commands([command], level, timeout)
