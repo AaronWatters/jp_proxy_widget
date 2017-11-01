@@ -33,10 +33,15 @@ var JSProxyModel = widgets.DOMWidgetModel.extend({
 var JSProxyView = widgets.DOMWidgetView.extend({
 
     render: function() {
+        debugger;
         var that = this;
         that.on("displayed", function() {
             that.update();
         });
+
+        that.model.on("msg:custom", function() {
+            that.custom_message(arguments);
+        })
         // Wrap $el as a proper jQuery object
         that.$$el = $(that.$el);
         // "new" keyword emulation
@@ -76,6 +81,14 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             that.model.set("results", [command_counter, results])
             that.touch();
         }
+    },
+
+    custom_message: function(args) {
+        var that = this;
+        debugger;
+        console.log("args=" + args);
+        // send it back again
+        that.model.send(args);
     },
 
     execute_command: function(command) {

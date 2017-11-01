@@ -14,7 +14,7 @@ supplies access to the needed methods from Python:
      dialog = js_proxy.ProxyWidget()
      command = dialog.element().html("Hello from jqueryui").dialog()
      display(dialog)
-     dialog.send(command)
+     dialog.send_command(command)
 
 The strategy is to pass a sequence of encoded javascript "commands" as a JSON
 object to the generic widget proxy and have the proxy execute javascript actions
@@ -197,7 +197,12 @@ class JSProxyWidget(widgets.DOMWidget):
         #self.callback_to_identifier = {}
         self.on_trait_change(self.handle_callback_results, "callback_results")
         self.on_trait_change(self.handle_results, "results")
+        print "registered on_msg(handle_custom_message)"
+        self.on_msg(self.handle_custom_message)
         self.buffered_commands = []
+
+    def handle_custom_message(self, widget, data, *etcetera):
+        self._last_message_data = data
 
     def embedded_html(self, debugger=False, await=[], template=HTML_EMBEDDING_TEMPLATE, div_id=None):
         """
@@ -304,7 +309,7 @@ class JSProxyWidget(widgets.DOMWidget):
         if results_callback is not None:
             results_callback(json_value, arguments)
 
-    def send(self, command, results_callback=None, level=1):
+    def send_command(self, command, results_callback=None, level=1):
         "Send a single command to the JS View."
         return self.send_commands([command], results_callback, level)
 
@@ -370,7 +375,7 @@ class JSProxyWidget(widgets.DOMWidget):
         """
         if not arguments:
             arguments = [self.element()]
-        return self.send(self.function(["element"], "debugger;")(self.element()))
+        return self.send_command(self.function(["element"], "debugger;")(self.element()))
 
     def element(self):
         "Return a proxy reference to the Widget JQuery element this.$el."
