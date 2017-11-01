@@ -184,7 +184,7 @@ class JSProxyWidget(widgets.DOMWidget):
     rendered = traitlets.Bool(False, sync=True)
 
     # traitlet port to receive results of commands from javascript
-    results = traitlets.List([], sync=True)
+    #results = traitlets.List([], sync=True)
 
     # traitlet port to receive results of callbacks from javascript
     callback_results = traitlets.List([], sync=True)
@@ -206,11 +206,14 @@ class JSProxyWidget(widgets.DOMWidget):
         self.buffered_commands = []
         self.commands_awaiting_render = []
         self.last_commands_sent = []
+        self.results = []
+        self.status = "Not yet rendered"
 
     def handle_rendered(self, att_name, old, new):
         "when rendered send any commands awaiting the render event."
         if self.commands_awaiting_render:
             self.send_commands([])
+        self.status= "Rendered."
 
     def send_custom_message(self, indicator, payload):
         package = { 
@@ -221,6 +224,14 @@ class JSProxyWidget(widgets.DOMWidget):
 
     def handle_custom_message(self, widget, data, *etcetera):
         self._last_message_data = data
+        indicator = data["indicator"];
+        payload = data["payload"]
+        if indicator == "results":
+            self.results = payload
+            self.status = "Got results."
+            self.handle_results(payload)
+        else:
+            self.status = "Unknown indicator from custom message " + repr(indicator)
 
     def embedded_html(self, debugger=False, await=[], template=HTML_EMBEDDING_TEMPLATE, div_id=None):
         """
@@ -306,7 +317,7 @@ class JSProxyWidget(widgets.DOMWidget):
         klass = self.window().Function
         return self.element().New(klass, list(arguments) + [body])
 
-    def handle_results(self, att_name, old, new):
+    def handle_results(self, new):
         "Callback for when results arrive after the JS View executes commands."
         if self.verbose:
             print ("got results", new)
@@ -352,7 +363,7 @@ class JSProxyWidget(widgets.DOMWidget):
             return payload
         else:
             # wait for render event before sending commands.
-            print "waiting for render!", commands
+            #print "waiting for render!", commands
             self.commands_awaiting_render.extend(commands)
             return ("awaiting render", commands)
     

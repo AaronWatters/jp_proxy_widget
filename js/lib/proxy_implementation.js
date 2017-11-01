@@ -85,13 +85,23 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             } catch (err) {
                 results.push("" + err);
             }
-            that.model.set("commands", []);
-            that.model.set("results", [command_counter, results])
-            that.touch();
+            //that.model.set("commands", []);
+            //that.model.set("results", [command_counter, results])
+            //that.touch();
         } else {
             results.push("no commands sent?");
         }
+        that.send_custom_message("results", [command_counter, results])
         return results;
+    },
+
+    send_custom_message: function(indicator, payload) {
+        var that = this;
+        message = {
+            "indicator": indicator,
+            "payload": payload
+        }
+        that.model.send(message)
     },
 
     handle_custom_message: function(content, buffers, widget) {
