@@ -205,14 +205,16 @@ var JSProxyView = widgets.DOMWidgetView.extend({
     },
 
     callback_factory: function(identifier, data, level) {
+        // create a callback which sends a message back to the Jupyter Kernel
         var that = this;
         // Counter makes sure change is noticed even if other arguments don't change.
         var counter = 0;
         var handler = function () {
             counter += 1;
             var payload = that.json_safe([identifier, data, arguments, counter], level + 1);
-            that.model.set("callback_results", payload);
-            that.touch();
+            //that.model.set("callback_results", payload);
+            //that.touch();
+            that.send_custom_message("callback_results", payload)
         };
         return handler;
     },

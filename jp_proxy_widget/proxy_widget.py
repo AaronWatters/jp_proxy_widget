@@ -187,7 +187,7 @@ class JSProxyWidget(widgets.DOMWidget):
     #results = traitlets.List([], sync=True)
 
     # traitlet port to receive results of callbacks from javascript
-    callback_results = traitlets.List([], sync=True)
+    #callback_results = traitlets.List([], sync=True)
 
     verbose = False
 
@@ -198,14 +198,15 @@ class JSProxyWidget(widgets.DOMWidget):
         self.default_event_callback = None
         self.identifier_to_callback = {}
         #self.callback_to_identifier = {}
-        self.on_trait_change(self.handle_callback_results, "callback_results")
-        self.on_trait_change(self.handle_results, "results")
+        #self.on_trait_change(self.handle_callback_results, "callback_results")
+        #self.on_trait_change(self.handle_results, "results")
         self.on_trait_change(self.handle_rendered, "rendered")
         #print "registered on_msg(handle_custom_message)"
         self.on_msg(self.handle_custom_message)
         self.buffered_commands = []
         self.commands_awaiting_render = []
         self.last_commands_sent = []
+        self.last_callback_results = None
         self.results = []
         self.status = "Not yet rendered"
 
@@ -230,6 +231,10 @@ class JSProxyWidget(widgets.DOMWidget):
             self.results = payload
             self.status = "Got results."
             self.handle_results(payload)
+        elif indicator == "callback_results":
+            self.status = "got callback results"
+            self.last_callback_results = payload
+            self.handle_callback_results(payload)
         else:
             self.status = "Unknown indicator from custom message " + repr(indicator)
 
@@ -328,13 +333,14 @@ class JSProxyWidget(widgets.DOMWidget):
             del i2c[identifier]
             results_callback(json_value)
 
-    def handle_callback_results(self, att_name, old, new):
+    def handle_callback_results(self, new):
         "Callback for when the JS View sends an event notification."
         if self.verbose:
             print ("got callback results", new)
         [identifier, json_value, arguments, counter] = new
         i2c = self.identifier_to_callback
         results_callback = i2c.get(identifier)
+        self.status = "call back to " + repr(results_callback)
         if results_callback is not None:
             results_callback(json_value, arguments)
 
