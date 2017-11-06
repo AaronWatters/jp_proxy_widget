@@ -107,6 +107,8 @@ PASSED TO PYTHON: None
 
 """
 
+#print "this should be a syntax error in py3"
+
 import ipywidgets as widgets
 from traitlets import Unicode
 import time
@@ -114,7 +116,7 @@ import IPython
 from IPython.display import display, HTML
 import traitlets
 import json
-import threading
+#import threading
 import types
 
 
