@@ -141,6 +141,7 @@ setup_args = {
         'ipywidgets>=7.0.0',
     ],
     'packages': find_packages(),
+    'package_data': {'jp_proxy_widget': ['js/*.js']},
     'zip_safe': False,
     'cmdclass': {
         'build_py': js_prerelease(build_py),
