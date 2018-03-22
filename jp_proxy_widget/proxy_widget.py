@@ -118,6 +118,8 @@ import traitlets
 import json
 #import threading
 import types
+import traceback
+from . import js_context
 
 
 # In the IPython context get_ipython is a builtin.
@@ -225,6 +227,9 @@ class JSProxyWidget(widgets.DOMWidget):
         }
         self.send(package)
 
+    # slot for last message data debugging
+    _last_message_data = None
+
     def handle_custom_message(self, widget, data, *etcetera):
         self._last_message_data = data
         indicator = data["indicator"];
@@ -324,6 +329,8 @@ class JSProxyWidget(widgets.DOMWidget):
         klass = self.window().Function
         return self.element().New(klass, list(arguments) + [body])
 
+    handle_results_exception = None
+
     def handle_results(self, new):
         "Callback for when results arrive after the JS View executes commands."
         if self.verbose:
@@ -333,7 +340,13 @@ class JSProxyWidget(widgets.DOMWidget):
         results_callback = i2c.get(identifier)
         if results_callback is not None:
             del i2c[identifier]
-            results_callback(json_value)
+            try:
+                results_callback(json_value)
+            except Exception as e:
+                self.handle_results_exception = e
+                raise
+
+    handle_callback_results_exception = None
 
     def handle_callback_results(self, new):
         "Callback for when the JS View sends an event notification."
@@ -344,7 +357,11 @@ class JSProxyWidget(widgets.DOMWidget):
         results_callback = i2c.get(identifier)
         self.status = "call back to " + repr(results_callback)
         if results_callback is not None:
-            results_callback(json_value, arguments)
+            try:
+                results_callback(json_value, arguments)
+            except Exception as e:
+                self.handle_callback_results_exception = e
+                raise
 
     def send_command(self, command, results_callback=None, level=1):
         "Send a single command to the JS View."
@@ -434,10 +451,14 @@ class JSProxyWidget(widgets.DOMWidget):
         "Return a proxy reference to the browser window top level name space."
         return CommandMaker("window")
 
+    def load_js_files(self, filenames, verbose=False, delay=0.1, force=False, local=True):
+        #import js_context
+        js_context.load_if_not_loaded(self, filenames, verbose=verbose, delay=delay, force=force, local=local)
+
 
 def validate_commands(commands, top=True):
     """
-    Validate a command sequence (and convert to list formate if needed.)
+    Validate a command sequence (and convert to list format if needed.)
     """
     return [validate_command(c, top) for c in commands]
 

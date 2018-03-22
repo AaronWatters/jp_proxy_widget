@@ -13,22 +13,45 @@ my_dir = os.path.dirname(__file__)
 
 LOADED_JAVASCRIPT = set()
 
-def load_if_not_loaded(filenames, verbose=False, delay=0.1, force=False, local=True):
+def get_file_path(filename, local=True):
+    user_path = result = filename
+    if local:
+        user_path = os.path.expanduser(filename)
+        result = os.path.abspath(user_path)
+        if os.path.exists(result):
+            return result
+    result = os.path.join(my_dir, filename)
+    assert os.path.exists(result), "no such file " + repr((filename, result, user_path))
+    return result
+
+def display_javascript(widget, js_filename):
+    return display(Javascript(js_filename))
+
+def eval_javascript(widget, js_filename):
+    eval = widget.window().eval
+    # ??? are there possible encoding issues here?
+    text = open(js_filename).read()
+    widget(eval(text))
+    return widget.flush()
+
+# global default evaluation method
+EVALUATOR = eval_javascript
+
+def load_if_not_loaded(widget, filenames, verbose=False, delay=0.1, force=False, local=True, evaluator=None):
     """
     Load a javascript file to the Jupyter notebook context,
     unless it was already loaded.
     """
-    loaded = False
+    if evaluator is None:
+        evaluator = EVALUATOR  # default if not specified.
     for filename in filenames:
-        if local and os.path.exists(filename):
-            js_filename = os.path.abspath(filename)
-        else:
-            js_filename = os.path.join(my_dir, filename)
-        assert os.path.exists(js_filename), "no such file " + repr(js_filename)
+        loaded = False
+        js_filename = get_file_path(filename, local)
         if force or not js_filename in LOADED_JAVASCRIPT:
             if verbose:
-                print("loading javascript file", js_filename)
-            display(Javascript(js_filename))
+                print("loading javascript file", js_filename, "with", evaluator)
+            #display(Javascript(js_filename))
+            evaluator(widget, js_filename)
             LOADED_JAVASCRIPT.add(js_filename)
             loaded = True
         else:

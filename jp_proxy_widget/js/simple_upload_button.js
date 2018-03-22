@@ -25,7 +25,7 @@ Logic from http://www.html5rocks.com/en/tutorials/file/dndfiles/
             return result;
         };
         var to_hex_string = function (buffer) {
-            debugger;
+            //debugger;
             var bytes = new Uint8Array(buffer);
             return Array.from(bytes).map(hex_byte).join("");
         };
