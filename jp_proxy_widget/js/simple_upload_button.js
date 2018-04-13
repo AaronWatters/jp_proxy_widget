@@ -11,6 +11,7 @@ Logic from http://www.html5rocks.com/en/tutorials/file/dndfiles/
 
 (function($) {
     $.fn.simple_upload_button = function (callback, options) {
+        //debugger;
         var settings = $.extend({
             "size_limit": 10000000,
             "style": {"display": "inline-block"},
@@ -41,7 +42,7 @@ Logic from http://www.html5rocks.com/en/tutorials/file/dndfiles/
                     "content": null,
                     "size": file.size
                 };
-                if (settings.size_limit && (settings.size_limit > data.size)) {
+                if ((!settings.size_limit) || (settings.size_limit > data.size)) {
                     var reader = new FileReader();
                     reader.onload = function (event) {
                         var result = event.target.result;
