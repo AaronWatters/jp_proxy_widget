@@ -21,7 +21,7 @@ class UnicodeUploader:
     status = None
     uploaded_filename = None
 
-    def __init__(self, html_title=None, content_callback=None, to_filename=None):
+    def __init__(self, html_title=None, content_callback=None, to_filename=None, size_limit=None):
         assert content_callback is None or to_filename is None, (
             "content_callback and to_filename are mutually exclusive, please do not provide both. "
             + repr((content_callback, to_filename))
@@ -29,6 +29,7 @@ class UnicodeUploader:
         assert content_callback is not None or to_filename is not None, (
             "content_callback or to_filename must be specified."
         )
+        self.size_limit = size_limit
         self.to_filename = to_filename
         self.content_callback = content_callback
         w = self.widget = jp_proxy_widget.JSProxyWidget()
@@ -38,6 +39,7 @@ class UnicodeUploader:
             w(element.html(html_title)._null())
         level = 2
         options = self.upload_options()
+        options["size_limit"] = size_limit
         proxy_callback = w.callback(self.widget_callback_handler, data="upload click", level=level)
         element = w.element()
         upload_button = element.simple_upload_button(proxy_callback, options)
@@ -60,6 +62,7 @@ class UnicodeUploader:
         self.uploaded_filename = to_filename
 
     def widget_callback_handler(self, data, results):
+        self.status = "upload callback called."
         file_info = results["0"]
         name = file_info["name"]
         content = self.get_content(file_info)
