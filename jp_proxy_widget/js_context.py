@@ -28,6 +28,7 @@ def display_javascript(widget, js_filename):
     return display(Javascript(js_filename))
 
 def eval_javascript(widget, js_filename):
+    # This will not work if javascript evaluation is disabled (in Jupyter Lab for example).
     eval = widget.window().eval
     # ??? are there possible encoding issues here?
     text = open(js_filename).read()

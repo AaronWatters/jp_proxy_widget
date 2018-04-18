@@ -171,6 +171,20 @@ JAVASCRIPT_EMBEDDING_TEMPLATE + """
 # For creating unique DOM identities for embedded objects
 IDENTITY_COUNTER = [int(time.time()) % 10000000]
 
+# String constants for messaging
+INDICATOR = "indicator"
+PAYLOAD = "payload"
+RESULTS = "results"
+CALLBACK_RESULTS = "callback_results"
+JSON_CB_FRAGMENT = "jcb_results"
+JSON_CB_FINAL = "jcb_final"
+COMMANDS = "commands"
+COMMANDS_FRAGMENT = "cm_fragment"
+COMMANDS_FINAL = "cm_final"
+
+# message egmentation size default
+BIG_SEGMENT = 1000000
+
 @widgets.register
 class JSProxyWidget(widgets.DOMWidget):
     """Introspective javascript proxy widget."""
@@ -222,28 +236,46 @@ class JSProxyWidget(widgets.DOMWidget):
 
     def send_custom_message(self, indicator, payload):
         package = { 
-            "indicator": indicator,
-            "payload": payload,
+            INDICATOR: indicator,
+            PAYLOAD: payload,
         }
         self.send(package)
 
     # slot for last message data debugging
     _last_message_data = None
+    _json_accumulator = []
+    _last_custom_message_error = None
+    _last_accumulated_json = None
 
     def handle_custom_message(self, widget, data, *etcetera):
-        self._last_message_data = data
-        indicator = data["indicator"];
-        payload = data["payload"]
-        if indicator == "results":
-            self.results = payload
-            self.status = "Got results."
-            self.handle_results(payload)
-        elif indicator == "callback_results":
-            self.status = "got callback results"
-            self.last_callback_results = payload
-            self.handle_callback_results(payload)
-        else:
-            self.status = "Unknown indicator from custom message " + repr(indicator)
+        try:
+            self._last_message_data = data
+            indicator = data[INDICATOR];
+            payload = data[PAYLOAD]
+            if indicator == RESULTS:
+                self.results = payload
+                self.status = "Got results."
+                self.handle_results(payload)
+            elif indicator == CALLBACK_RESULTS:
+                self.status = "got callback results"
+                self.last_callback_results = payload
+                self.handle_callback_results(payload)
+            elif indicator == JSON_CB_FRAGMENT:
+                self._json_accumulator.append(payload)
+            elif indicator == JSON_CB_FINAL:
+                acc = self._json_accumulator
+                self._json_accumulator = []
+                acc.append(payload)
+                self._last_accumulated_json = acc
+                accumulated_json_str = u"".join(acc)
+                accumulated_json_ob = json.loads(accumulated_json_str)
+                self.handle_callback_results(accumulated_json_ob)
+            else:
+                self.status = "Unknown indicator from custom message " + repr(indicator)
+        except Exception as e:
+            # for debugging assistance
+            self._last_custom_message_error = e
+            raise
 
     def embedded_html(self, debugger=False, await=[], template=HTML_EMBEDDING_TEMPLATE, div_id=None):
         """
@@ -288,11 +320,15 @@ class JSProxyWidget(widgets.DOMWidget):
         self.buffered_commands.append(command)
         return command
 
-    def flush(self, results_callback=None, level=1):
+    def seg_flush(self, results_callback=None, level=1, segmented=BIG_SEGMENT):
+        "flush a potentially large command sequence, segmented."
+        return self.flush(results_callback, level, segmented)
+
+    def flush(self, results_callback=None, level=1, segmented=None):
         "send the buffered commands and clear the buffer. Convenience."
         commands = self.buffered_commands
         self.buffered_commands = []
-        return self.send_commands(commands, results_callback, level)
+        return self.send_commands(commands, results_callback, level, segmented=segmented)
 
     def save(self, name, reference):
         """
@@ -367,8 +403,11 @@ class JSProxyWidget(widgets.DOMWidget):
         "Send a single command to the JS View."
         return self.send_commands([command], results_callback, level)
 
-    def send_commands(self, commands_iter, results_callback=None, level=1):
-        "Send several commands fo the JS View."
+    def send_commands(self, commands_iter, results_callback=None, level=1, segmented=None):
+        """Send several commands fo the JS View.
+        If segmented is a positive integer then the commands payload will be pre-encoded
+        as a json string and sent in segments of that length
+        """
         count = self.counter
         self.counter = count + 1
         qcommands = list(map(quoteIfNeeded, commands_iter))
@@ -383,7 +422,10 @@ class JSProxyWidget(widgets.DOMWidget):
                 self.identifier_to_callback[count] = results_callback
             # send the command using the commands traitlet which is mirrored to javascript.
             #self.commands = payload
-            self.send_custom_message("commands", payload)
+            if segmented and segmented > 0:
+                self.send_segmented_message(COMMANDS_FRAGMENT, COMMANDS_FINAL, payload, segmented)
+            else:
+                self.send_custom_message(COMMANDS, payload)
             self.last_commands_sent = payload
             return payload
         else:
@@ -391,6 +433,20 @@ class JSProxyWidget(widgets.DOMWidget):
             #print "waiting for render!", commands
             self.commands_awaiting_render.extend(commands)
             return ("awaiting render", commands)
+
+    def send_segmented_message(self, frag_ind, final_ind, payload, segmented):
+        json_str = json.dumps(payload)
+        len_json = len(json_str)
+        cursor = 0
+        # don't reallocate large string tails...
+        while len_json - cursor > segmented:
+            next_cursor = cursor + segmented
+            json_fragment = json_str[cursor: next_cursor]
+            # send the fragment
+            self.send_custom_message(frag_ind, json_fragment)
+            cursor = next_cursor
+        json_tail = json_str[cursor:]
+        self.send_custom_message(final_ind, json_tail)
     
     def evaluate(self, command, level=1, timeout=3000):
         "Send one command and wait for result.  Return result."
@@ -416,13 +472,21 @@ class JSProxyWidget(widgets.DOMWidget):
             ip.kernel.do_one_iteration()
         return result_list[0]
 
-    def callback(self, callback_function, data, level=1, delay=False):
+    def seg_callback(self, callback_function, data, level=1, delay=False, segmented=BIG_SEGMENT):
+        """
+        Proxy callback with message segmentation to support potentially large
+        messages.
+        """
+        return self.callback(callback_function, data, level, delay, segmented)
+
+    def callback(self, callback_function, data, level=1, delay=False, segmented=None):
         "Create a 'proxy callback' to receive events detected by the JS View."
         assert level > 0, "level must be positive " + repr(level)
         assert level <= 5, "level cannot exceed 5 " + repr(level)
+        assert segmented is None or (type(segmented) is int and segmented > 0), "bad segment " + repr(segmented)
         count = self.counter
         self.counter = count + 1
-        command = CallMaker("callback", count, data, level)
+        command = CallMaker("callback", count, data, level, segmented)
         #if delay:
         #    callback_function = delay_in_thread(callback_function)
         self.identifier_to_callback[count] = callback_function
@@ -496,11 +560,13 @@ def validate_command(command, top=True):
             d = dict((k, validate_command(d[k], top=False)) for k in d)
             remainder = [d]
         elif indicator == "callback":
-            [numerical_identifier, untranslated_data, level] = remainder
+            [numerical_identifier, untranslated_data, level, segmented] = remainder
             assert type(numerical_identifier) is int, \
                 "must be integer " + repr(numerical_identifier)
             assert type(level) is int, \
                 "must be integer " + repr(level)
+            assert (segmented is None) or (type(segmented) is int and segmented > 0), \
+                "must be None or positive integer " + repr(segmented)
         elif indicator == "get":
             [target, name] = remainder
             target = validate_command(target, top=True)

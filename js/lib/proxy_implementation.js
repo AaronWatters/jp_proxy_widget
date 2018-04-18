@@ -35,6 +35,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
     render: function() {
         debugger;
         var that = this;
+        that._json_accumulator = [];
         that.on("displayed", function() {
             that.update();
         });
@@ -63,10 +64,22 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         that.touch();
     },
 
+    // String constants for messaging
+    INDICATOR: "indicator",
+    PAYLOAD: "payload",
+    RESULTS: "results",
+    CALLBACK_RESULTS: "callback_results",
+    JSON_CB_FRAGMENT: "jcb_results",
+    JSON_CB_FINAL: "jcb_final",
+    COMMANDS: "commands",
+    COMMANDS_FRAGMENT: "cm_fragment",
+    COMMANDS_FINAL: "cm_final",
+
     update: function(options) {
-        var that = this;
-        var commands = that.model.get("commands");
-        return that.execute_commands(commands);
+        // do nothing.
+        //var that = this;
+        //var commands = that.model.get("commands");
+        //return that.execute_commands(commands);
     },
 
     execute_commands: function(commands) {
@@ -91,29 +104,37 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         } else {
             results.push("no commands sent?");
         }
-        that.send_custom_message("results", [command_counter, results])
+        that.send_custom_message(that.RESULTS, [command_counter, results])
         return results;
     },
 
     send_custom_message: function(indicator, payload) {
         var that = this;
-        message = {
-            "indicator": indicator,
-            "payload": payload
-        }
+        message = {};
+        message[that.INDICATOR] = indicator;
+        message[that.PAYLOAD] = payload;
         that.model.send(message)
     },
 
     handle_custom_message: function(content, buffers, widget) {
         var that = this;
-        debugger;
-        var indicator = content["indicator"];
-        var payload = content["payload"];
-        if (indicator == "commands") {
+        var indicator = content[that.INDICATOR];
+        var payload = content[that.PAYLOAD];
+        if (indicator == that.COMMANDS) {
+            that._json_accumulator = [];
             that.execute_commands(payload);
+        } else if (indicator == that.COMMANDS_FRAGMENT) {
+            that._json_accumulator.push(payload);
+        } else if (indicator == that.COMMANDS_FINAL) {
+            var acc = that._json_accumulator;
+            that._json_accumulator = [];
+            acc.push(payload);
+            var json_str = acc.join("");
+            var commands = JSON.parse(json_str);
+            that.execute_commands(commands);
+        } else {
+            console.log("invalid custom message indicator " + indicator);
         }
-        // send it back again
-        //that.model.send(args);
     },
 
     execute_command: function(command) {
@@ -164,9 +185,10 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                 var identifier = remainder.shift();
                 var data = remainder.shift();
                 var level = remainder.shift();
+                var segmented = remainder.shift();
                 // sanity check
                 level = that.check_level(level);
-                result = that.callback_factory(identifier, data, level);
+                result = that.callback_factory(identifier, data, level, segmented);
             } else if (indicator == "get") {
                 var target_desc = remainder.shift();
                 var target = that.execute_command(target_desc);
@@ -204,7 +226,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         return level;
     },
 
-    callback_factory: function(identifier, data, level) {
+    callback_factory: function(identifier, data, level, segmented) {
         // create a callback which sends a message back to the Jupyter Kernel
         var that = this;
         // Counter makes sure change is noticed even if other arguments don't change.
@@ -214,9 +236,28 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             var payload = that.json_safe([identifier, data, arguments, counter], level + 1);
             //that.model.set("callback_results", payload);
             //that.touch();
-            that.send_custom_message("callback_results", payload)
+            if ((segmented) && (segmented > 0)) {
+                that.send_segmented_message(that.JSON_CB_FRAGMENT, that.JSON_CB_FINAL, payload, segmented);
+            } else {
+                that.send_custom_message("callback_results", payload);
+            }
         };
         return handler;
+    },
+
+    send_segmented_message(frag_indicator, final_indicator, payload, segmented) {
+        var that = this;
+        var json_str = JSON.stringify(payload);
+        var json_len = json_str.length;
+        var cursor = 0;
+        while ((cursor + segmented) < json_len) {
+            var next_cursor = cursor + segmented;
+            var fragment = json_str.substring(cursor, next_cursor);
+            cursor = next_cursor;
+            that.send_custom_message(frag_indicator, fragment);
+        }
+        var tail = json_str.substring(cursor, json_len);
+        that.send_custom_message(final_indicator, tail);
     },
 
     json_safe: function(val, depth) {

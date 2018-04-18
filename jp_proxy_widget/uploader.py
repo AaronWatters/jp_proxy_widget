@@ -21,7 +21,10 @@ class UnicodeUploader:
     status = None
     uploaded_filename = None
 
-    def __init__(self, html_title=None, content_callback=None, to_filename=None, size_limit=None):
+    def __init__(self, html_title=None, content_callback=None, to_filename=None, size_limit=None,
+        segmented = 1000000):
+        # by default segment files into chunks to avoid message size limits
+        self.segmented = segmented
         assert content_callback is None or to_filename is None, (
             "content_callback and to_filename are mutually exclusive, please do not provide both. "
             + repr((content_callback, to_filename))
@@ -40,7 +43,9 @@ class UnicodeUploader:
         level = 2
         options = self.upload_options()
         options["size_limit"] = size_limit
-        proxy_callback = w.callback(self.widget_callback_handler, data="upload click", level=level)
+
+        proxy_callback = w.callback(self.widget_callback_handler, data="upload click", level=level,
+            segmented=self.segmented)
         element = w.element()
         upload_button = element.simple_upload_button(proxy_callback, options)
         w(element.append(upload_button))
