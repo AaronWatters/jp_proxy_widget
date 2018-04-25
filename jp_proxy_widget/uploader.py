@@ -115,8 +115,10 @@ class UnicodeUploader(HasTraits):
                 self.status += "\n" + repr(content_callback) + " raised " + repr(e)
                 raise
 
+    encoding_factor = 1
+
     def progress_callback(self, chunks, file_info):
-        size = file_info["size"]
+        size = file_info["size"] * self.encoding_factor
         got = 0
         for c in chunks:
             got += len(c)
@@ -140,6 +142,8 @@ class UnicodeUploader(HasTraits):
         return content
 
 class BinaryUploader(UnicodeUploader):
+
+    encoding_factor = 2
 
     def upload_options(self):
         return {"hexidecimal": True}
