@@ -120,6 +120,7 @@ import json
 import types
 import traceback
 from . import js_context
+from .hex_codec import hex_to_bytearray, bytearray_to_hex
 
 
 # In the IPython context get_ipython is a builtin.
@@ -227,6 +228,21 @@ class JSProxyWidget(widgets.DOMWidget):
         self.last_callback_results = None
         self.results = []
         self.status = "Not yet rendered"
+
+    def js_init(self, js_function_body, **other_arguments):
+        """
+        Run special purpose javascript initialization code.
+        The function body is provided with the element as a free variable.
+        """
+        other_argument_names = list(other_arguments.keys())
+        other_argument_values = [other_arguments[name] for name in other_argument_names]
+        argument_names = list(["element"] + other_argument_names)
+        argument_values = list([self.element()] + other_argument_values)
+        function = self.function(argument_names, js_function_body)
+        function_call = function(*argument_values)
+        # execute the function call on the javascript side.
+        self(function_call)
+        self.flush()
 
     def handle_rendered(self, att_name, old, new):
         "when rendered send any commands awaiting the render event."
@@ -341,7 +357,26 @@ class JSProxyWidget(widgets.DOMWidget):
         save_command = elt._set(name, reference)
         # buffer the save operation
         self(save_command)
-        # return the referency bu name
+        # return the reference by name
+        return getattr(elt, name)
+
+    def load_js_module(self, name, filepath, local=True):
+        """
+        Load a require.js module from a file accessible by Python.
+        """
+        full_file_path = js_context.get_file_path(filepath, local)
+        text = open(full_file_path).read()
+        return self.load_js_module_text(name, text)
+
+    def load_js_module_text(self, name, text):
+        """
+        Load a require.js module text.
+        Later the module content will be available as self.element()[name].
+        """
+        elt = self.element()
+        load_call = elt._load_js_module(name, text)
+        self(load_call)
+        # return reference to the loaded module
         return getattr(elt, name)
 
     def save_new(self, name, constructor, arguments):
@@ -551,8 +586,8 @@ def validate_command(command, top=True):
             target = validate_command(target, top=True)
             args = validate_commands(args, top=False)
             remainder = [target] + args
-        elif indicator == "id":
-            assert len(remainder) == 1, "id takes one argument only " + repr(remainder)
+        elif indicator == "id" or indicator == "bytes":
+            assert len(remainder) == 1, "id or bytes takes one argument only " + repr(remainder)
         elif indicator == "list":
             remainder = validate_commands(remainder, top=False)
         elif indicator == "dict":
@@ -606,10 +641,13 @@ def to_javascript(thing, level=0, indent=None, comma=","):
         elif ty is list or ty is tuple:
             L = [to_javascript(x) for x in thing]
             json_value = "[%s]" % (comma.join(L))
+        elif ty is bytearray:
+            inner = list(map(int, thing))
+            # Note: no line breaks for binary data.
+            json_value = "Uint8Array(%s)" % inner
         elif json_value is None:
             json_value = json.dumps(thing, indent=indent)
         return indent_string(json_value, level)
-
 
 
 class CommandMaker(object):
@@ -786,7 +824,7 @@ class LiteralMaker(CommandMaker):
     proxy references.
     """
 
-    indicators = {dict: "dict", list: "list"}
+    indicators = {dict: "dict", list: "list", bytearray: "bytes"}
 
     def __init__(self, thing):
         self.thing = thing
@@ -805,6 +843,8 @@ class LiteralMaker(CommandMaker):
                 return [indicator] + quoteLists(thing)
             elif ty is dict:
                 return [indicator, dict((k, quoteIfNeeded(thing[k])) for k in thing)]
+            elif ty is bytearray:
+                return [indicator, bytearray_to_hex(thing)]
             else:
                 raise ValueError("can't translate " + repr(ty))
         return thing

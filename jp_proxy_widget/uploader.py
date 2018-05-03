@@ -1,5 +1,5 @@
 """
-Upload files to jupyter server location using jp_proxy.
+Upload files to jupyter server location or to Python callback using jp_proxy.
 """
 
 import jp_proxy_widget

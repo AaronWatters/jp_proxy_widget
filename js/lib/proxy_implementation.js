@@ -28,6 +28,42 @@ var JSProxyModel = widgets.DOMWidgetModel.extend({
     })
 });
 
+// Define a require.js module to help with loading external modules
+// from source code
+var module_name_to_text = {};
+
+//var loader_defined = false;
+var JSProxyLoad = "JSProxyLoad";
+
+// Alias the require.js define and require functions.  xxxx is there a better way?
+var requirejs = window["require"];
+var definejs = window["define"];
+
+// Define the loader at the last minute...
+var define_loader = function() {
+    if (!requirejs.defined(JSProxyLoad)) {
+        module_name_to_text = [];
+        definejs(JSProxyLoad, [], function() {
+            return {
+                normalize: function(name, _) {
+                    return name; // is this needed?
+                },
+                load: function (name, req, onload, config) {
+                    var text = module_name_to_text[name];
+                    onload.fromText(text);
+                    // delete the text? xxxx
+                }
+            };
+        });
+        // self test.
+        var dummy_text = 'define([], function() { console.log("loading dummy..."); return " dummy value!! "; })';
+        module_name_to_text["xxxdummy"] = dummy_text;
+        requirejs([JSProxyLoad + "!xxxdummy"], function(the_value) {
+            console.log("JSProxyLoad for xxx_dummy succeeded. " + the_value);
+        });
+    }
+    //loader_defined = true;
+}
 
 // Custom View. Renders the widget model.
 var JSProxyView = widgets.DOMWidgetView.extend({
@@ -45,6 +81,20 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         })
         // Wrap $el as a proper jQuery object
         that.$$el = $(that.$el);
+
+        // _load_js_module function
+        // Load a require.js module and store the loaded object as $$el[name].
+        // note that there is a hypothetical delay before the module becomes available.
+        that.$$el._load_js_module = function(name, text) {
+            define_loader();
+            // store the text in global dictionary for use by the plugin
+            module_name_to_text[name] = text;
+            // use the require.js plugin above to load the module, then store it in $$el when done.
+            requirejs([JSProxyLoad + "!" + name], function(the_module) {
+                that.$$el[name] = the_module;
+            });
+        };
+
         // "new" keyword emulation
         // http://stackoverflow.com/questions/17342497/dynamically-control-arguments-while-creating-objects-in-javascript
         that.$$el.New = function(klass, args) {
@@ -210,6 +260,9 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                 target_desc = remainder.shift();
                 that.execute_command(target_desc);
                 result = null;
+            } else if (indicator == "bytes") {
+                var hexstr = remainder[0];
+                result = this.from_hex(hexstr);
             } else {
                 result = "Unknown indicator " + indicator;
             }
@@ -260,12 +313,46 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         that.send_custom_message(final_indicator, tail);
     },
 
+    to_hex: function(int8) {
+        var length = int8.length;
+        var hex_array = Array(length);
+        for (var i=0; i<length; i++) {
+            var b = int8[i];
+            var h = b.toString(16);
+            if (h.length==1) {
+                h = "0" + h
+            }
+            hex_array[i] = h;
+        }
+        return hex_array.join("");
+    },
+
+    from_hex: function(hexstr) {
+        var length2 = hexstr.length;
+        if ((length2 % 2) != 0) {
+            throw "hex string length must be multiple of length 2";
+        }
+        var length = length2 / 2;
+        var result = new Uint8Array(length);
+        for (var i=0; i<length; i++) {
+            var i2 = 2 * i;
+            var h = hexstr.substring(i2, i2+2);
+            var b = parseInt(h, 16);
+            result[i] = b;
+        }
+        return result;
+    },
+
     json_safe: function(val, depth) {
         // maybe expand later as need arises
         var that = this;
         var ty = (typeof val);
         if ((ty == "number") || (ty == "string") || (ty == "boolean")) {
             return val;
+        }
+        if ((val instanceof Uint8Array) || (val instanceof Uint8ClampedArray)) {
+            // send as hexidecimal string
+            return that.to_hex(val);
         }
         if (!val) {
             // translate all other falsies to None
