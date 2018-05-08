@@ -50,12 +50,25 @@ class UnicodeUploader(HasTraits):
         options = self.upload_options()
         options["size_limit"] = size_limit
         options["chunk_size"] = chunk_size
-        proxy_callback = w.callback(self.widget_callback_handler, data="upload click", level=level,
-            segmented=self.segmented)
-        element = w.element()
-        upload_button = element.simple_upload_button(proxy_callback, options)
-        w(element.append(upload_button))
-        w.flush()
+        #proxy_callback = w.callback(self.widget_callback_handler, data="upload click", level=level,
+        #    segmented=self.segmented)
+        #element = w.element()
+        #upload_button = element.simple_upload_button(proxy_callback, options)
+        w.js_init("""
+            debugger;
+            var upload_callback = function(data) {
+                var content = data.content;
+                if (!($.type(content) === "string")) {
+                    content = data.hexcontent;
+                }
+                handle_chunk(data.status, data.name, content, data);
+            }
+            var upload_button = element.simple_upload_button(upload_callback, options);
+            element.append(upload_button);
+        """, handle_chunk=self.handle_chunk_wrapper, options=options)
+        #w(element.append(upload_button))
+        #w.flush()
+        self.chunk_collector = []
         self.status = "initialized"
 
     def show(self):
@@ -74,6 +87,7 @@ class UnicodeUploader(HasTraits):
         self.status = "wrote " + repr(len(content)) + " to " + repr(to_filename)
         self.uploaded_filename = to_filename
 
+    """
     def widget_callback_handler(self, data, results):
         self.status = "upload callback called."
         try:
@@ -85,23 +99,36 @@ class UnicodeUploader(HasTraits):
             return self.handle_chunk(status, name, content, file_info)
         except Exception as e:
             self.status = "callback exception: " + repr(e)
-            raise
+            raise"""
 
-    chunk_collector = []
+    output = None
+
+    def handle_chunk_wrapper(self, status, name, content, file_info):
+        """wrapper to allow output redirects for handle_chunk."""
+        out = self.output
+        if out is not None:
+            with out:
+                print("handling chunk " + repr(type(content)))
+                self.handle_chunk(status, name, content, file_info)
+        else:
+            self.handle_chunk(status, name, content, file_info)
 
     def handle_chunk(self, status, name, content, file_info):
         "Handle one chunk of the file.  Override this method for peicewise delivery or error handling."
+        print(type(content))
         if status == "error":
             msg = repr(file_info.get("message"))
             exc = JavaScriptError(msg)
             exc.file_info = file_info
             self.status = "Javascript sent exception " + msg
+            self.chunk_collector = []
             raise exc
         if status == "more":
             self.chunk_collector.append(content)
             self.progress_callback(self.chunk_collector, file_info)
         else:
             assert status == "done", "Unknown status " + repr(status)
+            self.save_chunks = self.chunk_collector
             self.chunk_collector.append(content)
             all_content = self.combine_chunks(self.chunk_collector)
             self.chunk_collector = []
