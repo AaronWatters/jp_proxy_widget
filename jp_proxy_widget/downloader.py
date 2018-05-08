@@ -12,7 +12,7 @@ js_file = "js/Filesaver.js"
 
 js_helper = """
 // function(element) {
-    debugger;
+    // debugger;
     element.download = function(file_name, value, type) {
         // value can be string or Uint8Array
         var blob = new Blob([value], {type: type});
@@ -24,7 +24,7 @@ js_helper = """
 def load_file_saver(to_proxy_widget, sleep=0.1):
     w = to_proxy_widget
     if not hasattr(to_proxy_widget, "saveAs_loaded"):
-        w.load_js_module("saveAs", js_file)
+        w.require_js("saveAs", js_file)
         w.js_init(js_helper)
         w.flush()
         # sleep a little bit to allow javascript interpreter to sync
