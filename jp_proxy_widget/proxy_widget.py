@@ -210,6 +210,9 @@ class JSProxyWidget(widgets.DOMWidget):
 
     verbose = False
 
+    # set to automatically flush messages to javascript side without buffering
+    auto_flush = True
+
     def __init__(self, *pargs, **kwargs):
         super(JSProxyWidget, self).__init__(*pargs, **kwargs)
         self.counter = 0
@@ -221,7 +224,7 @@ class JSProxyWidget(widgets.DOMWidget):
         #self.on_trait_change(self.handle_results, "results")
         self.on_trait_change(self.handle_rendered, "rendered")
         #print "registered on_msg(handle_custom_message)"
-        self.on_msg(self.handle_custom_message)
+        self.on_msg(self.handle_custom_message_wrapper)
         self.buffered_commands = []
         self.commands_awaiting_render = []
         self.last_commands_sent = []
@@ -229,13 +232,17 @@ class JSProxyWidget(widgets.DOMWidget):
         self.results = []
         self.status = "Not yet rendered"
 
-    def js_init(self, js_function_body, **other_arguments):
+    def js_init(self, js_function_body, callable_level=3, **other_arguments):
         """
         Run special purpose javascript initialization code.
         The function body is provided with the element as a free variable.
         """
         other_argument_names = list(other_arguments.keys())
-        other_argument_values = [other_arguments[name] for name in other_argument_names]
+        def map_value(v):
+            if callable(v):
+                return self.callable(v, level=callable_level)
+            return v
+        other_argument_values = [map_value(other_arguments[name]) for name in other_argument_names]
         argument_names = list(["element"] + other_argument_names)
         argument_values = list([self.element()] + other_argument_values)
         function = self.function(argument_names, js_function_body)
@@ -262,6 +269,18 @@ class JSProxyWidget(widgets.DOMWidget):
     _json_accumulator = []
     _last_custom_message_error = None
     _last_accumulated_json = None
+    
+    # Output context for message handling -- will print exception traces, for example, if set
+    output = None 
+
+    def handle_custom_message_wrapper(self, widget, data, *etcetera):
+        "wrapper to enable output redirects for custom messages."
+        output = self.output
+        if output is not None:
+            with output:
+                self.handle_custom_message(widget, data, *etcetera)
+        else:
+            self.handle_custom_message(widget, data, *etcetera)
 
     def handle_custom_message(self, widget, data, *etcetera):
         try:
@@ -334,6 +353,8 @@ class JSProxyWidget(widgets.DOMWidget):
     def __call__(self, command):
         "Add a command to the buffered commands. Convenience."
         self.buffered_commands.append(command)
+        if self.auto_flush:
+            self.flush()
         return command
 
     def seg_flush(self, results_callback=None, level=1, segmented=BIG_SEGMENT):
@@ -360,12 +381,12 @@ class JSProxyWidget(widgets.DOMWidget):
         # return the reference by name
         return getattr(elt, name)
 
-    def load_js_module(self, name, filepath, local=True):
+    def require_js(self, name, filepath, local=True):
         """
         Load a require.js module from a file accessible by Python.
         """
-        full_file_path = js_context.get_file_path(filepath, local)
-        text = open(full_file_path).read()
+
+        text = js_context.get_text_from_file_name(filepath, local)
         return self.load_js_module_text(name, text)
 
     def load_js_module_text(self, name, text):
@@ -418,9 +439,11 @@ class JSProxyWidget(widgets.DOMWidget):
                 raise
 
     handle_callback_results_exception = None
+    last_callback_results = None
 
     def handle_callback_results(self, new):
         "Callback for when the JS View sends an event notification."
+        self.last_callback_results = new
         if self.verbose:
             print ("got callback results", new)
         [identifier, json_value, arguments, counter] = new
@@ -512,6 +535,30 @@ class JSProxyWidget(widgets.DOMWidget):
         Proxy callback with message segmentation to support potentially large
         messages.
         """
+        return self.callback(callback_function, data, level, delay, segmented)
+
+    def callable(self, function_or_method, level=1, delay=False, segmented=None):
+        """
+        Simplified callback protocol.
+        Map function_or_method to a javascript function js_function
+        Calls to js_function(x, y, z)
+        will trigger calls to function_or_method(x, y, z)
+        where x, y, z are json compatible values.
+        """
+        data = repr(function_or_method)
+        def callback_function(_data, arguments):
+            count = 0
+            # construct the Python argument list from argument mapping
+            py_arguments = []
+            while 1:
+                argstring = str(count)
+                if argstring in arguments:
+                    argvalue = arguments[argstring]
+                    py_arguments.append(argvalue)
+                    count += 1
+                else:
+                    break
+            function_or_method(*py_arguments)
         return self.callback(callback_function, data, level, delay, segmented)
 
     def callback(self, callback_function, data, level=1, delay=False, segmented=None):
