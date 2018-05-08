@@ -363,18 +363,18 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                 var result = [];
                 _.each(val, function(elt, i) {
                     var r = that.json_safe(elt, depth-1);
-                    if (r != null) {
-                        result[i] = r;
-                    }
+                    //if (r != null) {
+                    result[i] = r;
+                    //}
                 });
                 return result;
             } else {
                 var result = {};
                 for (var key in val) {
                     var jv = that.json_safe(val[key], depth-1);
-                    if (jv != null) {
-                        result[key] = jv;
-                    }
+                    //if (jv != null) {
+                    result[key] = jv;
+                    //}
                 }
                 return result;
             }
