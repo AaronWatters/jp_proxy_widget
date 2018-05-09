@@ -135,13 +135,13 @@ setup_args = {
             'jp_proxy_widget/static/extension.js',
             'jp_proxy_widget/static/index.js',
             'jp_proxy_widget/static/index.js.map',
-        ]),
+        ],),
+        ('etc/jupyter/nbconfig/notebook.d/' ,['jp_proxy_widget.json'])
     ],
     'install_requires': [
         'ipywidgets>=7.0.0',
     ],
     'packages': find_packages(),
-    'package_data': {'jp_proxy_widget': ['js/*.js']},
     'zip_safe': False,
     'cmdclass': {
         'build_py': js_prerelease(build_py),
@@ -151,7 +151,7 @@ setup_args = {
     },
 
     'author': 'Aaron Watters',
-    'author_email': 'awatters@simonsfoundation.org',
+    'author_email': 'awatters@flatironinstitute.org',
     'url': 'https://github.com/AaronWatters/jp_proxy_widget',
     'keywords': [
         'ipython',
