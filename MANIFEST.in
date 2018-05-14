@@ -1,1 +1,2 @@
 recursive-include jp_proxy_widget/static *.*
+recursive-include jp_proxy_widget/js *.*
