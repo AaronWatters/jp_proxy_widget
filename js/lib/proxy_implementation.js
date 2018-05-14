@@ -1,6 +1,9 @@
 var widgets = require('@jupyter-widgets/base');
 var _ = require('lodash');
 
+// locally packaged jquery -- use only if needed!
+var jquery_ = require('jquery');
+
 
 // Custom Model. Custom widgets models must at least provide default values
 // for model attributes, including
@@ -36,14 +39,14 @@ var module_name_to_text = {};
 var JSProxyLoad = "JSProxyLoad";
 
 // Alias the require.js define and require functions.  xxxx is there a better way?
-var requirejs = window["require"];
-var definejs = window["define"];
+//var requirejs = window["require"];
+//var definejs = window["define"];
 
 // Define the loader at the last minute...
-var define_loader = function() {
-    if (!requirejs.defined(JSProxyLoad)) {
+var define_loader = function(element) {
+    if (!element.requirejs.defined(JSProxyLoad)) {
         module_name_to_text = [];
-        definejs(JSProxyLoad, [], function() {
+        element.definejs(JSProxyLoad, [], function() {
             return {
                 normalize: function(name, _) {
                     return name; // is this needed?
@@ -58,7 +61,7 @@ var define_loader = function() {
         // self test.
         var dummy_text = 'define([], function() { console.log("loading dummy..."); return " dummy value!! "; })';
         module_name_to_text["xxxdummy"] = dummy_text;
-        requirejs([JSProxyLoad + "!xxxdummy"], function(the_value) {
+        element.requirejs([JSProxyLoad + "!xxxdummy"], function(the_value) {
             console.log("JSProxyLoad for xxx_dummy succeeded. " + the_value);
         });
     }
@@ -70,7 +73,10 @@ var JSProxyView = widgets.DOMWidgetView.extend({
 
     render: function() {
         debugger;
+
         var that = this;
+        this.el.textContent = "Proxy widget placeholder text";
+
         that._json_accumulator = [];
         that.on("displayed", function() {
             that.update();
@@ -80,19 +86,37 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             that.handle_custom_message(content, buffers, widget);
         })
         // Wrap $el as a proper jQuery object
-        that.$$el = $(that.$el);
+        // This is the "element" exposed on the Python side.
+        if (window["jQuery"]) {
+            // use the window jQuery if available
+            jquery_ = window["jQuery"];
+        }
+        that.$$el = jquery_(that.el);
+        that.$$el.jQuery = jquery_;
+
+        // store aliases to the require and define functions (if available)
+        that.$$el.alias_require = function () {
+            that.$$el.requirejs = window["require"];
+            that.$$el.definejs = window["define"];
+        };
+        // May have to call this again after loading require if needed.
+        that.$$el.alias_require();
 
         // _load_js_module function
         // Load a require.js module and store the loaded object as $$el[name].
         // note that there is a hypothetical delay before the module becomes available.
         that.$$el._load_js_module = function(name, text) {
-            define_loader();
-            // store the text in global dictionary for use by the plugin
-            module_name_to_text[name] = text;
-            // use the require.js plugin above to load the module, then store it in $$el when done.
-            requirejs([JSProxyLoad + "!" + name], function(the_module) {
-                that.$$el[name] = the_module;
-            });
+            if (that.$$el.requirejs) {
+                define_loader(that.$$el);
+                // store the text in global dictionary for use by the plugin
+                module_name_to_text[name] = text;
+                // use the require.js plugin above to load the module, then store it in $$el when done.
+                that.$$el.requirejs([JSProxyLoad + "!" + name], function(the_module) {
+                    that.$$el[name] = the_module;
+                });
+            } else {
+                return "Cannot load_js_module if requirejs is not avaiable";
+            }
         };
 
         // "new" keyword emulation
@@ -105,10 +129,9 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         // fix key bindings for wayward element.
         // XXXX This is a bit of a hack that may not be needed in future
         // Jupyter releases.
-        that.$$el.Fix = function(element) {
-            debugger;
-            that.model.widget_manager.keyboard_manager.register_events(element);
-        };
+        //that.$$el.Fix = function(element) {
+        //    that.model.widget_manager.keyboard_manager.register_events(element);
+        //};
 
         that.model.set("rendered", true);
         that.touch();
@@ -190,15 +213,15 @@ var JSProxyView = widgets.DOMWidgetView.extend({
     execute_command: function(command) {
         var that = this;
         var result = command;
-        if ($.isArray(command)) {
+        if (jquery_.isArray(command)) {
             var indicator = command[0];
             var remainder = command.slice();
             remainder.shift();
             if (indicator == "element") {
                 // Make sure the element is wrapped as a proper JQuery(UI) object
-                if (!that.$$el) {
-                    that.$$el = $(that.$el);
-                }
+                //if (!that.$$el) {
+                //    that.$$el = $(that.$el);
+                //}
                 result = that.$$el;
             } else if (indicator == "window") {
                 result = window;
@@ -359,7 +382,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             return null;
         }
         if (((typeof depth) == "number") && (depth > 0)) {
-            if ($.isArray(val)) {
+            if (jquery_.isArray(val)) {
                 var result = [];
                 _.each(val, function(elt, i) {
                     var r = that.json_safe(elt, depth-1);
