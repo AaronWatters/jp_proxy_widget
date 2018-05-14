@@ -123,6 +123,31 @@ from . import js_context
 from .hex_codec import hex_to_bytearray, bytearray_to_hex
 
 
+def load_components(verbose=False):
+    # shortcut will not work correctly if window has been reloaded.
+    #if JSProxyWidget._jqueryUI_checked and JSProxyWidget._require_checked:
+    #    if verbose:
+    #        print("Components loaded previously.")
+    #    return
+    w = JSProxyWidget()
+    w.visible = False
+    show = w
+    w.js_init("element.html('&nbsp;')")  # "no" visible content for widget
+    if verbose:
+        show = w.debugging_display(tagline="Checking/loading javascript helpers for proxy widgets:")
+    display(show)
+    # add require after adding jquery
+    #   xxxx really should add registration for jquery and jqueryui with requirejs if it is available...
+    def jquery_loaded():
+        if verbose:
+            print ("jQuery and jQueryUI loaded")
+    w.check_jquery(onsuccess=jquery_loaded)
+    def requirejs_loaded():
+        if verbose:
+            print ("requirejs loaded")
+    w._check_require_is_loaded(onsuccess=requirejs_loaded)
+
+
 # In the IPython context get_ipython is a builtin.
 # get a reference to the IPython notebook object.
 ip = IPython.get_ipython()
@@ -223,7 +248,7 @@ class JSProxyWidget(widgets.DOMWidget):
         #self.on_trait_change(self.handle_callback_results, "callback_results")
         #self.on_trait_change(self.handle_results, "results")
         self.on_trait_change(self.handle_rendered, "rendered")
-        #print "registered on_msg(handle_custom_message)"
+        ##pr "registered on_msg(handle_custom_message)"
         self.on_msg(self.handle_custom_message_wrapper)
         self.buffered_commands = []
         self.commands_awaiting_render = []
@@ -237,6 +262,8 @@ class JSProxyWidget(widgets.DOMWidget):
         Run special purpose javascript initialization code.
         The function body is provided with the element as a free variable.
         """
+        #pr ("js_init")
+        #pr(js_function_body)
         other_argument_names = list(other_arguments.keys())
         def map_value(v):
             if callable(v):
@@ -282,6 +309,18 @@ class JSProxyWidget(widgets.DOMWidget):
         else:
             self.handle_custom_message(widget, data, *etcetera)
 
+    def debugging_display(self, tagline="debug message area for widget:", border='1px solid black'):
+        if border:
+            out = widgets.Output(layout={'border': '1px solid black'})
+        else:
+            out = widgets.Output()
+        if tagline:
+            with out:
+                print (tagline)
+        self.output = out
+        assembly = widgets.VBox(children=[self, out])
+        return assembly
+
     def handle_custom_message(self, widget, data, *etcetera):
         try:
             self._last_message_data = data
@@ -309,6 +348,7 @@ class JSProxyWidget(widgets.DOMWidget):
                 self.status = "Unknown indicator from custom message " + repr(indicator)
         except Exception as e:
             # for debugging assistance
+            #pr ("custom message error " + repr(e))
             self._last_custom_message_error = e
             raise
 
@@ -321,7 +361,7 @@ class JSProxyWidget(widgets.DOMWidget):
         IDENTITY_COUNTER[0] += 1
         if div_id is None:
             div_id = "jupyter_proxy_widget" + str(IDENTITY_COUNTER[0])
-        #print("id", div_id)
+        ##pr("id", div_id)
         debugger_string = "// Initialize static widget display with no debugging."
         if debugger:
             debugger_string = "// Debug mode for static widget display\ndebugger;"
@@ -381,11 +421,110 @@ class JSProxyWidget(widgets.DOMWidget):
         # return the reference by name
         return getattr(elt, name)
 
+    _jqueryUI_checked = False
+
+    def check_jquery(self, 
+        code_fn="js/jquery-ui-1.12.1/jquery-ui.js", 
+        style_fn="js/jquery-ui-1.12.1/jquery-ui.css",
+        sleep_delay=0.2, onsuccess=None):
+        """
+        Make JQuery and JQueryUI globally available for other modules.
+        """
+        # check whether any widget in this context has loaded jqueryUI
+        # xxx shortcut will not work in lab after reload
+        #if JSProxyWidget._jqueryUI_checked:
+        #    if onsuccess:
+        #        onsuccess()
+        #    return  # Don't need to check twice
+        def load_failed():
+            raise ImportError("Failed to load JQueryUI in javascript context.")
+        def load_succeeded():
+            # mark successful load for interpreter context.
+            JSProxyWidget._jqueryUI_checked = True
+            if onsuccess:
+                onsuccess()
+        def load_jqueryUI():
+            # Attach the global jquery
+            #pr("loading jquery")
+            self.js_init("""
+                console.log("assigning jquery");
+                window["jQuery"] = element.jQuery;
+                window["$"] = element.jQuery;
+            """)
+            self.load_css(style_fn)
+            self.load_js_files([code_fn])
+            #pr("sleeping to allow sync")
+            time.sleep(sleep_delay)
+            #pr("rechecking load")
+            self.js_init("""
+                console.log("rechecking jquery load");
+                if (element.dialog) {
+                    load_succeeded();
+                } else {
+                    load_failed();
+                }
+            """, load_failed=load_failed, load_succeeded=load_succeeded)
+            #pr ("finished with load_jqueryUI")
+        self.js_init("""
+            console.log("checking jquery load")
+            if (element.dialog)
+            {
+                load_succeeded();
+            } else {
+                load_jqueryUI();
+            }
+        """, load_succeeded=load_succeeded, load_jqueryUI=load_jqueryUI)
+        #pr("exitting checkjQuery")
+
+    _require_checked = False
+
+    def _check_require_is_loaded(self, filepath="js/require.js", onsuccess=None):
+        """
+        Force load require.js if window.require is not yet available.
+        """
+        # xxx shortcut will not work in lab after reload
+        #if JSProxyWidget._require_checked:
+        #    if onsuccess:
+        #        onsuccess()
+        #    # Don't need to check twice.
+        #    return
+        def load_failed():
+            raise ImportError("Failed to load require.js in javascript context.")
+        def load_succeeded():
+            JSProxyWidget._require_checked = True
+            if onsuccess:
+                onsuccess()
+        def load_require_js():
+            self.load_js_files([filepath])
+            self.js_init("""
+                console.log("proxy widget: assigning require aliases.");
+                element.alias_require();
+                if (element.requirejs) {
+                    load_succeeded();
+                } else {
+                    load_failed();
+                }
+            """, load_failed=load_failed, load_succeeded=load_succeeded)
+        self.js_init("""
+            console.log("checking for requirejs");
+            if (element.requirejs) {
+                load_succeeded();
+            } else {
+                load_require_js();
+            }
+        """, load_require_js=load_require_js, load_succeeded=load_succeeded)
+
+    def load_css(self, filepath, local=True):
+        """
+        Load a CSS text content from a file accessible by Python.
+        """
+        text = js_context.get_text_from_file_name(filepath, local)
+        return js_context.display_css(self, text)
+
     def require_js(self, name, filepath, local=True):
         """
         Load a require.js module from a file accessible by Python.
         """
-
         text = js_context.get_text_from_file_name(filepath, local)
         return self.load_js_module_text(name, text)
 
@@ -435,6 +574,7 @@ class JSProxyWidget(widgets.DOMWidget):
             try:
                 results_callback(json_value)
             except Exception as e:
+                #pr ("handle results exception " + repr(e))
                 self.handle_results_exception = e
                 raise
 
@@ -454,6 +594,7 @@ class JSProxyWidget(widgets.DOMWidget):
             try:
                 results_callback(json_value, arguments)
             except Exception as e:
+                #pr ("handle results callback exception " +repr(e))
                 self.handle_callback_results_exception = e
                 raise
 
@@ -488,7 +629,7 @@ class JSProxyWidget(widgets.DOMWidget):
             return payload
         else:
             # wait for render event before sending commands.
-            #print "waiting for render!", commands
+            ##pr "waiting for render!", commands
             self.commands_awaiting_render.extend(commands)
             return ("awaiting render", commands)
 
@@ -588,6 +729,18 @@ class JSProxyWidget(widgets.DOMWidget):
         if not arguments:
             arguments = [self.element()]
         return self.send_command(self.function(["element"], "debugger;")(self.element()))
+
+    def print_status(self):
+        status_slots = """
+            results
+            auto_flush _last_message_data _json_accumulator _last_custom_message_error
+            _last_accumulated_json _jqueryUI_checked _require_checked
+            handle_results_exception last_callback_results
+            """
+        print (repr(self) + " STATUS:")
+        for slot_name in status_slots.split():
+            print ("\t::::: " + slot_name + " :::::")
+            print (getattr(self, slot_name, "MISSING"))
 
     def element(self):
         "Return a proxy reference to the Widget JQuery element this.$el."
