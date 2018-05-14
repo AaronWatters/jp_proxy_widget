@@ -6,7 +6,7 @@ python interpreter.
 from __future__ import print_function
 
 import os
-from IPython.display import display, Javascript
+from IPython.display import display, Javascript, HTML
 import time
 import requests
 
@@ -36,6 +36,11 @@ def get_text_from_file_name(filename, local=True):
 def display_javascript(widget, js_text):
     # This will not work if javascript is disabled.
     return display(Javascript(data=js_text))
+
+def display_css(widget, css_text):
+    # this should still work in jupyterlab as of last attempt :)
+    styletext = "<style>\n%s\n</style>" % css_text
+    display(HTML(styletext))
 
 def eval_javascript(widget, js_text):
     eval = widget.window().eval
