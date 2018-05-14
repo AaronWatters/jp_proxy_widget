@@ -8,8 +8,9 @@ from traitlets import Unicode, HasTraits
 
 js_files = ["js/simple_upload_button.js"]
 
-def _load_required_js(widget):
-    widget.load_js_files(filenames=js_files)
+def _load_required_js(widget, verbose=False):
+    jp_proxy_widget.load_components(verbose=verbose)
+    widget.load_js_files(filenames=js_files, verbose=verbose)
 
 def from_hex_iterator(hexcontent):
     # xxxx try to optimize...
@@ -115,7 +116,6 @@ class UnicodeUploader(HasTraits):
 
     def handle_chunk(self, status, name, content, file_info):
         "Handle one chunk of the file.  Override this method for peicewise delivery or error handling."
-        print(type(content))
         if status == "error":
             msg = repr(file_info.get("message"))
             exc = JavaScriptError(msg)
