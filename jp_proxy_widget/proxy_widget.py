@@ -227,6 +227,10 @@ class JSProxyWidget(widgets.DOMWidget):
     # Rendered flag sent by JS view after render is complete.
     rendered = traitlets.Bool(False, sync=True)
 
+    status = traitlets.Unicode("Not initialized", sync=True)
+
+    error_msg = traitlets.Unicode("No error", sync=True)
+
     # traitlet port to receive results of commands from javascript
     #results = traitlets.List([], sync=True)
 
@@ -311,14 +315,18 @@ class JSProxyWidget(widgets.DOMWidget):
 
     def debugging_display(self, tagline="debug message area for widget:", border='1px solid black'):
         if border:
-            out = widgets.Output(layout={'border': '1px solid black'})
+            out = widgets.Output(layout={'border': border})
         else:
             out = widgets.Output()
         if tagline:
             with out:
                 print (tagline)
         self.output = out
-        assembly = widgets.VBox(children=[self, out])
+        status_text = widgets.Text(description="status:", value="")
+        traitlets.directional_link((self, "status"), (status_text, "value"))
+        error_text = widgets.Text(description="error", value="")
+        traitlets.directional_link((self, "error_msg"), (error_text, "value"))
+        assembly = widgets.VBox(children=[self, status_text, error_text, out])
         return assembly
 
     def handle_custom_message(self, widget, data, *etcetera):
@@ -335,8 +343,10 @@ class JSProxyWidget(widgets.DOMWidget):
                 self.last_callback_results = payload
                 self.handle_callback_results(payload)
             elif indicator == JSON_CB_FRAGMENT:
+                self.status = "got callback fragment"
                 self._json_accumulator.append(payload)
             elif indicator == JSON_CB_FINAL:
+                self.status = "got callback final"
                 acc = self._json_accumulator
                 self._json_accumulator = []
                 acc.append(payload)
@@ -350,7 +360,12 @@ class JSProxyWidget(widgets.DOMWidget):
             # for debugging assistance
             #pr ("custom message error " + repr(e))
             self._last_custom_message_error = e
+            self.error_msg = repr(e)
             raise
+
+    def unique_id(self, prefix="jupyter_proxy_widget_id_"):
+        IDENTITY_COUNTER[0] += 1
+        return prefix + str(IDENTITY_COUNTER[0])
 
     def embedded_html(self, debugger=False, await=[], template=HTML_EMBEDDING_TEMPLATE, div_id=None):
         """
@@ -358,9 +373,8 @@ class JSProxyWidget(widgets.DOMWidget):
         """
         assert type(await) is list
         await_string = json.dumps(await)
-        IDENTITY_COUNTER[0] += 1
         if div_id is None:
-            div_id = "jupyter_proxy_widget" + str(IDENTITY_COUNTER[0])
+            div_id = self.unique_id()
         ##pr("id", div_id)
         debugger_string = "// Initialize static widget display with no debugging."
         if debugger:
@@ -576,6 +590,7 @@ class JSProxyWidget(widgets.DOMWidget):
             except Exception as e:
                 #pr ("handle results exception " + repr(e))
                 self.handle_results_exception = e
+                self.error_msg = "Handle results: " + repr(e)
                 raise
 
     handle_callback_results_exception = None
@@ -596,6 +611,7 @@ class JSProxyWidget(widgets.DOMWidget):
             except Exception as e:
                 #pr ("handle results callback exception " +repr(e))
                 self.handle_callback_results_exception = e
+                self.error_msg = "Handle callback results: " + repr(e)
                 raise
 
     def send_command(self, command, results_callback=None, level=1):
