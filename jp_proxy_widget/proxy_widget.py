@@ -123,25 +123,20 @@ from . import js_context
 from .hex_codec import hex_to_bytearray, bytearray_to_hex
 
 
+# xxxx remove this?
 def load_components(verbose=False):
     # shortcut will not work correctly if window has been reloaded.
     #if JSProxyWidget._jqueryUI_checked and JSProxyWidget._require_checked:
     #    if verbose:
     #        print("Components loaded previously.")
     #    return
-    w = JSProxyWidget()
-    w.visible = False
-    show = w
-    w.js_init("element.html('&nbsp;')")  # "no" visible content for widget
-    if verbose:
-        show = w.debugging_display(tagline="Checking/loading javascript helpers for proxy widgets:")
-    display(show)
+    w = JSProxyWidget.shared_loader_widget(verbose)
     # add require after adding jquery
     #   xxxx really should add registration for jquery and jqueryui with requirejs if it is available...
     def jquery_loaded():
         if verbose:
             print ("jQuery and jQueryUI loaded")
-    w.check_jquery(onsuccess=jquery_loaded)
+    w.check_jquery(onsuccess=jquery_loaded, verbose=verbose)
     def requirejs_loaded():
         if verbose:
             print ("requirejs loaded")
@@ -227,6 +222,10 @@ class JSProxyWidget(widgets.DOMWidget):
     # Rendered flag sent by JS view after render is complete.
     rendered = traitlets.Bool(False, sync=True)
 
+    status = traitlets.Unicode("Not initialized")
+
+    error_msg = traitlets.Unicode("No error", sync=True)
+
     # traitlet port to receive results of commands from javascript
     #results = traitlets.List([], sync=True)
 
@@ -257,6 +256,29 @@ class JSProxyWidget(widgets.DOMWidget):
         self.results = []
         self.status = "Not yet rendered"
 
+    # widget used to load javascript components (shared)
+    _shared_loader_widget = None
+
+    @classmethod
+    def shared_loader_widget(cls, verbose=False):
+        # xxxxx remove this?
+        w = cls._shared_loader_widget
+        if not w:
+            if verbose:
+                print("initializing loader widget") 
+            w = cls()
+            cls._shared_loader_widget = w
+            w.visible = False
+            show = w
+            w.js_init("element.html('&nbsp;')")  # "no" visible content for widget
+            if verbose:
+                show = w.debugging_display(tagline="Checking/loading javascript helpers for proxy widgets:")
+            JSProxyWidget._shared_loader_widget = w
+            display(show)
+        elif verbose:
+            print("using existing shared loading widget.")
+        return w
+
     def js_init(self, js_function_body, callable_level=3, **other_arguments):
         """
         Run special purpose javascript initialization code.
@@ -276,11 +298,30 @@ class JSProxyWidget(widgets.DOMWidget):
         function_call = function(*argument_values)
         # execute the function call on the javascript side.
         self(function_call)
-        self.flush()
+        #self.flush()
+
+    _load_components_when_rendered = False
+
+    def load_components(self, verbose=False, delay=15):
+        if not self.rendered:
+            # Loading components won't work until the element has been rendered.
+            self._load_components_when_rendered = True
+        else:
+            self.status = "loading components"
+            self.check_jquery(verbose=verbose)
+            self._check_require_is_loaded(verbose=verbose)
+            self.status = ("components loaded delaying " +
+                repr(len(self.commands_awaiting_render)))
+            time.sleep(delay)
+            self.status = "done loading components"
 
     def handle_rendered(self, att_name, old, new):
         "when rendered send any commands awaiting the render event."
+        # load components before sending commands
+        if self._load_components_when_rendered:
+            self.load_components()
         if self.commands_awaiting_render:
+            self.status = "now sending commands"
             self.send_commands([])
         self.status= "Rendered."
 
@@ -311,14 +352,18 @@ class JSProxyWidget(widgets.DOMWidget):
 
     def debugging_display(self, tagline="debug message area for widget:", border='1px solid black'):
         if border:
-            out = widgets.Output(layout={'border': '1px solid black'})
+            out = widgets.Output(layout={'border': border})
         else:
             out = widgets.Output()
         if tagline:
             with out:
                 print (tagline)
         self.output = out
-        assembly = widgets.VBox(children=[self, out])
+        status_text = widgets.Text(description="status:", value="")
+        traitlets.directional_link((self, "status"), (status_text, "value"))
+        error_text = widgets.Text(description="error", value="")
+        traitlets.directional_link((self, "error_msg"), (error_text, "value"))
+        assembly = widgets.VBox(children=[self, status_text, error_text, out])
         return assembly
 
     def handle_custom_message(self, widget, data, *etcetera):
@@ -335,8 +380,10 @@ class JSProxyWidget(widgets.DOMWidget):
                 self.last_callback_results = payload
                 self.handle_callback_results(payload)
             elif indicator == JSON_CB_FRAGMENT:
+                self.status = "got callback fragment"
                 self._json_accumulator.append(payload)
             elif indicator == JSON_CB_FINAL:
+                self.status = "got callback final"
                 acc = self._json_accumulator
                 self._json_accumulator = []
                 acc.append(payload)
@@ -350,7 +397,12 @@ class JSProxyWidget(widgets.DOMWidget):
             # for debugging assistance
             #pr ("custom message error " + repr(e))
             self._last_custom_message_error = e
+            self.error_msg = repr(e)
             raise
+
+    def unique_id(self, prefix="jupyter_proxy_widget_id_"):
+        IDENTITY_COUNTER[0] += 1
+        return prefix + str(IDENTITY_COUNTER[0])
 
     def embedded_html(self, debugger=False, await=[], template=HTML_EMBEDDING_TEMPLATE, div_id=None):
         """
@@ -359,8 +411,7 @@ class JSProxyWidget(widgets.DOMWidget):
         assert type(await) is list
         await_string = json.dumps(await)
         IDENTITY_COUNTER[0] += 1
-        if div_id is None:
-            div_id = "jupyter_proxy_widget" + str(IDENTITY_COUNTER[0])
+        div_id = self.unique_id()
         ##pr("id", div_id)
         debugger_string = "// Initialize static widget display with no debugging."
         if debugger:
@@ -426,7 +477,7 @@ class JSProxyWidget(widgets.DOMWidget):
     def check_jquery(self, 
         code_fn="js/jquery-ui-1.12.1/jquery-ui.js", 
         style_fn="js/jquery-ui-1.12.1/jquery-ui.css",
-        sleep_delay=0.2, onsuccess=None):
+        timeout_milliseconds=2000, onsuccess=None, verbose=False):
         """
         Make JQuery and JQueryUI globally available for other modules.
         """
@@ -444,41 +495,52 @@ class JSProxyWidget(widgets.DOMWidget):
             if onsuccess:
                 onsuccess()
         def load_jqueryUI():
-            # Attach the global jquery
+            # Attach the global jquery and lodash
             #pr("loading jquery")
-            self.js_init("""
-                console.log("assigning jquery");
-                window["jQuery"] = element.jQuery;
-                window["$"] = element.jQuery;
-            """)
             self.load_css(style_fn)
             self.load_js_files([code_fn])
             #pr("sleeping to allow sync")
-            time.sleep(sleep_delay)
             #pr("rechecking load")
             self.js_init("""
                 console.log("rechecking jquery load");
                 if (element.dialog) {
+                    console.log("recheck ok");
                     load_succeeded();
                 } else {
+                    console.log("recheck failed!!");
                     load_failed();
                 }
             """, load_failed=load_failed, load_succeeded=load_succeeded)
             #pr ("finished with load_jqueryUI")
+        if verbose:
+            print("sending load logic via js_init")
         self.js_init("""
             console.log("checking jquery load")
             if (element.dialog)
             {
+                console.log("jquery has been loaded")
                 load_succeeded();
             } else {
+                console.log("assigning jquery");
+                window["jQuery"] = element.jQuery;
+                window["$"] = element.jQuery;
+                window["_"] = element._;
                 load_jqueryUI();
             }
         """, load_succeeded=load_succeeded, load_jqueryUI=load_jqueryUI)
-        #pr("exitting checkjQuery")
+        if timeout_milliseconds is not None:
+            def jquery_load_finished():
+                return JSProxyWidget._jqueryUI_checked
+            if verbose:
+                print("awaiting jquery load flag")
+            self.await_condition(jquery_load_finished, timeout_milliseconds)
+        if verbose:
+            print("finished loading jQuery etc.")
 
     _require_checked = False
 
-    def _check_require_is_loaded(self, filepath="js/require.js", onsuccess=None):
+    def _check_require_is_loaded(self, filepath="js/require.js", onsuccess=None, verbose=False,
+        timeout_milliseconds=2000):
         """
         Force load require.js if window.require is not yet available.
         """
@@ -513,17 +575,36 @@ class JSProxyWidget(widgets.DOMWidget):
                 load_require_js();
             }
         """, load_require_js=load_require_js, load_succeeded=load_succeeded)
+        if timeout_milliseconds is not None:
+            def requirejs_load_finished():
+                return JSProxyWidget._require_checked 
+            if verbose:
+                print("awaiting requirejs load flag")
+            self.await_condition(requirejs_load_finished, timeout_milliseconds)
+        if verbose:
+            print("finished loading jQuery etc.")
 
     def load_css(self, filepath, local=True):
         """
         Load a CSS text content from a file accessible by Python.
         """
         text = js_context.get_text_from_file_name(filepath, local)
-        return js_context.display_css(self, text)
+        #return js_context.display_css(self, text)
+        return self.append_css(text)
+
+    def append_css(self, text):
+        #https://stackoverflow.com/questions/1212500/create-a-css-rule-class-with-jquery-at-runtime?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+        self.js_init(r"""
+        debugger;
+        element.jQuery("<style>")
+            .prop("type", "text/css")
+            .html("\n"+text)
+            .appendTo("head");
+        """, text=text)
 
     def require_js(self, name, filepath, local=True):
         """
-        Load a require.js module from a file accessible by Python.
+        Load a javascript require.js compatible module from a file accessible by Python.
         """
         text = js_context.get_text_from_file_name(filepath, local)
         return self.load_js_module_text(name, text)
@@ -531,7 +612,8 @@ class JSProxyWidget(widgets.DOMWidget):
     def load_js_module_text(self, name, text):
         """
         Load a require.js module text.
-        Later the module content will be available as self.element()[name].
+        Later the module content will be available as self.element()[name]
+        from Python or element[name] in js_init.
         """
         elt = self.element()
         load_call = elt._load_js_module(name, text)
@@ -541,10 +623,9 @@ class JSProxyWidget(widgets.DOMWidget):
 
     def save_new(self, name, constructor, arguments):
         """
-        Construct a 'new constructor(arguments)' and save in the element namespace.
+        Construct a 'new constructor(arguments)' and save the object in the element namespace.
         Store the construction in the command buffer and return a reference to the
         new object.
-        This must be followed by a flush() to execute the command.
         """
         new_reference = self.element().New(constructor, arguments)
         return self.save(name, new_reference)
@@ -576,6 +657,7 @@ class JSProxyWidget(widgets.DOMWidget):
             except Exception as e:
                 #pr ("handle results exception " + repr(e))
                 self.handle_results_exception = e
+                self.error_msg = repr(e)
                 raise
 
     handle_callback_results_exception = None
@@ -596,6 +678,7 @@ class JSProxyWidget(widgets.DOMWidget):
             except Exception as e:
                 #pr ("handle results callback exception " +repr(e))
                 self.handle_callback_results_exception = e
+                self.error_msg = repr(e)
                 raise
 
     def send_command(self, command, results_callback=None, level=1):
@@ -662,14 +745,33 @@ class JSProxyWidget(widgets.DOMWidget):
             result_list.append(json_value)
 
         self.send_commands(commands_iter, evaluation_callback, level)
-        # get_ipython is a builtin in the ipython context (no import needed (?))
-        #ip = get_ipython()
-        start = time.time()
-        while not result_list:
-            if time.time() - start > timeout/ 1000.0:
-                raise Exception("Timeout waiting for command results: " + repr(timeout))
-            ip.kernel.do_one_iteration()
+
+        def evaluate_finished():
+            return len(result_list) > 0
+
+        self.await_condition(evaluate_finished, timeout)
+
         return result_list[0]
+
+    def await_condition(self, condition, timeout_milliseconds, delay=0.01, verbose=False):
+        """
+        Wait for some condition to be caused by Javascript, or timeout
+        """
+        start = time.time()
+        count = 0
+        if verbose:
+            print("entering await loop for ", condition)
+        while not condition():
+            count += 1
+            if verbose and count % 500 == 0:
+                print(count, " awaiting ", condition)
+            if time.time() - start > timeout_milliseconds / 1000.0:
+                self.error_msg = "Time out in await_condition"
+                raise Exception("Timeout condition: " + repr((timeout, condition)))
+            ip.kernel.do_one_iteration()
+            time.sleep(delay)
+        if verbose:
+            print("done awaiting ", condition)
 
     def seg_callback(self, callback_function, data, level=1, delay=False, segmented=BIG_SEGMENT):
         """
