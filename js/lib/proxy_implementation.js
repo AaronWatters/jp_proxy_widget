@@ -93,6 +93,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         }
         that.$$el = jquery_(that.el);
         that.$$el.jQuery = jquery_;
+        that.$$el._ = _;
 
         // store aliases to the require and define functions (if available)
         that.$$el.alias_require = function () {
@@ -115,7 +116,9 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                     that.$$el[name] = the_module;
                 });
             } else {
-                return "Cannot load_js_module if requirejs is not avaiable";
+                var msg = "Cannot load_js_module if requirejs is not avaiable";
+                that.set_error_msg(msg);
+                return msg;
             }
         };
 
@@ -134,6 +137,13 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         //};
 
         that.model.set("rendered", true);
+        that.touch();
+    },
+
+    set_error_msg: function(message) {
+        var that = this;
+        that.error_msg = message;
+        that.model.set("error_msg", message);
         that.touch();
     },
 
@@ -169,7 +179,9 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                     results[i] = that.json_safe(result, level);
                 });
             } catch (err) {
-                results.push("" + err);
+                var msg = "" + err;
+                results.push(msg);
+                that.set_error_msg(msg);
             }
             //that.model.set("commands", []);
             //that.model.set("results", [command_counter, results])
@@ -270,6 +282,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                     result = target[name];
                 } catch(err) {
                     result = "failed to get "+name+" from "+target+" :: "+err;
+                    that.set_error_msg(result);
                 }
             } else if (indicator == "set") {
                 var target_desc = remainder.shift();
