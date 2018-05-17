@@ -12,7 +12,7 @@ supplies access to the needed methods from Python:
      from IPython.display import display
      js_proxy.load_javascript_support()
      dialog = js_proxy.ProxyWidget()
-     command = dialog.element().html("Hello from jqueryui").dialog()
+     command = dialog.get_element().html("Hello from jqueryui").dialog()
      display(dialog)
      dialog.send_command(command)
 
@@ -32,7 +32,7 @@ except that non-JSON permitted values are mapped to None.
 Here are notes on the encoding function E for the JSON commands and their interpretation
 as javascript actions:
 
-WIDGET INTERFACE: widget.element()
+WIDGET INTERFACE: widget.get_element()
 JSON ENCODING: ["element"]
 JAVASCRIPT ACTION: get the this.$el element for the widget.
 JAVASCRIPT RESULT: this.$el
@@ -207,6 +207,9 @@ JSON_CB_FINAL = "jcb_final"
 COMMANDS = "commands"
 COMMANDS_FRAGMENT = "cm_fragment"
 COMMANDS_FINAL = "cm_final"
+LOAD_CSS = "load_css"
+LOAD_JS = "load_js"
+LOAD_INDICATORS = [LOAD_CSS, LOAD_JS]
 
 # message egmentation size default
 BIG_SEGMENT = 1000000
@@ -244,6 +247,8 @@ class JSProxyWidget(widgets.DOMWidget):
 
     def __init__(self, *pargs, **kwargs):
         super(JSProxyWidget, self).__init__(*pargs, **kwargs)
+        # top level access for element operations
+        self.element = ElementWrapper(self)
         self.counter = 0
         self.count_to_results_callback = {}
         self.default_event_callback = None
@@ -275,7 +280,7 @@ class JSProxyWidget(widgets.DOMWidget):
             return v
         other_argument_values = [map_value(other_arguments[name]) for name in other_argument_names]
         argument_names = list(["element"] + other_argument_names)
-        argument_values = list([self.element()] + other_argument_values)
+        argument_values = list([self.get_element()] + other_argument_values)
         function = self.function(argument_names, js_function_body)
         function_call = function(*argument_values)
         # execute the function call on the javascript side.
@@ -428,7 +433,7 @@ class JSProxyWidget(widgets.DOMWidget):
         value is a reference to the element by name.
         This must be followed by a flush() to execute the command.
         """
-        elt = self.element()
+        elt = self.get_element()
         save_command = elt._set(name, reference)
         # buffer the save operation
         self(save_command)
@@ -533,7 +538,9 @@ class JSProxyWidget(widgets.DOMWidget):
         Load a CSS text content from a file accessible by Python.
         """
         text = js_context.get_text_from_file_name(filepath, local)
-        return js_context.display_css(self, text)
+        cmd = self.load_css_command(filepath, text)
+        self(cmd)
+        #return js_context.display_css(self, text)
 
     def require_js(self, name, filepath, local=True):
         """
@@ -545,9 +552,9 @@ class JSProxyWidget(widgets.DOMWidget):
     def load_js_module_text(self, name, text):
         """
         Load a require.js module text.
-        Later the module content will be available as self.element()[name].
+        Later the module content will be available as self.get_element()[name].
         """
-        elt = self.element()
+        elt = self.get_element()
         load_call = elt._load_js_module(name, text)
         self(load_call)
         # return reference to the loaded module
@@ -560,7 +567,7 @@ class JSProxyWidget(widgets.DOMWidget):
         new object.
         This must be followed by a flush() to execute the command.
         """
-        new_reference = self.element().New(constructor, arguments)
+        new_reference = self.get_element().New(constructor, arguments)
         return self.save(name, new_reference)
 
     def save_function(self, name, arguments, body):
@@ -572,7 +579,7 @@ class JSProxyWidget(widgets.DOMWidget):
 
     def function(self, arguments, body):
         klass = self.window().Function
-        return self.element().New(klass, list(arguments) + [body])
+        return self.get_element().New(klass, list(arguments) + [body])
 
     handle_results_exception = None
 
@@ -743,8 +750,8 @@ class JSProxyWidget(widgets.DOMWidget):
         Break in the Chrome debugger (only if developer tools is open)
         """
         if not arguments:
-            arguments = [self.element()]
-        return self.send_command(self.function(["element"], "debugger;")(self.element()))
+            arguments = [self.get_element()]
+        return self.send_command(self.function(["element"], "debugger;")(self.get_element()))
 
     def print_status(self):
         status_slots = """
@@ -758,7 +765,7 @@ class JSProxyWidget(widgets.DOMWidget):
             print ("\t::::: " + slot_name + " :::::")
             print (getattr(self, slot_name, "MISSING"))
 
-    def element(self):
+    def get_element(self):
         "Return a proxy reference to the Widget JQuery element this.$el."
         return CommandMaker("element")
 
@@ -768,7 +775,17 @@ class JSProxyWidget(widgets.DOMWidget):
 
     def load_js_files(self, filenames, verbose=False, delay=0.1, force=False, local=True):
         #import js_context
-        js_context.load_if_not_loaded(self, filenames, verbose=verbose, delay=delay, force=force, local=local)
+        #js_context.load_if_not_loaded(self, filenames, verbose=verbose, delay=delay, force=force, local=local)
+        for filepath in filenames:
+            filetext = js_context.get_text_from_file_name(filepath, local=True)
+            cmd = self.load_js_command(filepath, filetext)
+            self(cmd)
+
+    def load_js_command(self, js_name, js_text):
+        return Loader(LOAD_JS, js_name, js_text)
+
+    def load_css_command(self, css_name, css_text):
+        return Loader(LOAD_CSS, css_name, css_text)
 
 
 def validate_commands(commands, top=True):
@@ -804,6 +821,8 @@ def validate_command(command, top=True):
             remainder = [target] + args
         elif indicator == "id" or indicator == "bytes":
             assert len(remainder) == 1, "id or bytes takes one argument only " + repr(remainder)
+        elif indicator in LOAD_INDICATORS:
+            assert len(remainder) == 2, "loaders take exactly 2 arguments" + repr(len(remainder))
         elif indicator == "list":
             remainder = validate_commands(remainder, top=False)
         elif indicator == "dict":
@@ -864,6 +883,47 @@ def to_javascript(thing, level=0, indent=None, comma=","):
         elif json_value is None:
             json_value = json.dumps(thing, indent=indent)
         return indent_string(json_value, level)
+
+
+class ElementWrapper(object):
+
+    """
+    Convenient top level access to the widget element.
+
+    widget.element.action_name(arg1, arg2)
+
+    executes the same as widget(widget.get_element.action_name(arg1, arg2))
+    which executes this.$$el.action_name(arg1, arg2) on the Javascript side.
+    """
+
+    def __init__(self, for_widget):
+        self.widget = for_widget
+        self.widget_element = widget.get_element()
+
+    def __getattr__(self, name):
+        return ElementCallWrapper(self.widget, self.widget_element, name)
+
+    # for parallelism to _set
+    _get = __getattr__
+
+    # in javascript these are essentially the same thing.
+    __getitem__ = __getattr__
+
+    def _set(self, name, value):
+        "Proxy to set a property of the widget element."
+        return self.widget(self.widget_element._set(name, value))
+
+class ElementCallWrapper(object):
+
+    def __init__(self, for_widget, for_element, slot_name):
+        self.widget = for_widget
+        self.element = for_element
+
+    def __call__(self, *args):
+        widget = self.widget
+        element = self.element
+        slot = element[slot_name]
+        widget(slot(*args))
 
 
 class CommandMaker(object):
@@ -954,6 +1014,24 @@ class SetMaker(CommandMaker):
         target = self.target
         value = self.value
         return ["set", target, self.name, value]
+
+
+class Loader(CommandMaker):
+    """
+    Special commends for loading css and js async.
+    """
+
+    def __init__(self, indicator, name, text_content):
+        assert indicator in LOAD_INDICATORS
+        self.indicator = indicator
+        self.name = name
+        self.text_content = text_content
+
+    def javascript(self, level=0):
+        raise NotImplementedError("this hasn't been implemented yet, sorry.")
+
+    def _cmd(self):
+        return [self.indicator, self.name, self.text_content]
 
 
 class MethodMaker(CommandMaker):

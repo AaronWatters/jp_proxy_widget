@@ -75,7 +75,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         debugger;
 
         var that = this;
-        this.el.textContent = "Proxy widget placeholder text";
+        this.el.textContent = "Uninitialized Proxy Widget";
 
         that._json_accumulator = [];
         that.on("displayed", function() {
@@ -90,6 +90,10 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         if (window["jQuery"]) {
             // use the window jQuery if available
             jquery_ = window["jQuery"];
+        } else {
+            // put jQuery into the environment xxx maybe make this optional?
+            window["jQuery"] = jquery_;
+            window["$"] = jquery_;
         }
         that.$$el = jquery_(that.el);
         that.$$el.jQuery = jquery_;
@@ -173,6 +177,9 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             var command_list = commands[1];
             var level = commands[2];
             level = that.check_level(level);
+            // resume command execution at the beginning...
+            return that.resume_execute_commands(results, command_list, command_counter, level, 0);
+            /*
             try {
                 _.each(command_list, function(command,i) {
                     var result = that.execute_command(command);
@@ -183,14 +190,57 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                 results.push(msg);
                 that.set_error_msg(msg);
             }
-            //that.model.set("commands", []);
-            //that.model.set("results", [command_counter, results])
-            //that.touch();
+            */
         } else {
             results.push("no commands sent?");
         }
         that.send_custom_message(that.RESULTS, [command_counter, results])
         return results;
+    },
+
+    resume_execute_commands: function(results, command_list, command_counter, level, index) {
+        // resume command execution starting at index
+        var that = this;
+        var evaluator = null;
+        var evaluation_index = index;
+        var command = null;
+        try {
+            for (var i=index; i<command_list.length; i++) {
+                evaluation_index = i;
+                command = command_list[i];
+                var evaluation = that.execute_command(command);
+                evaluator = evaluation.evaluator;
+                var result = evaluation.result;
+                if (evaluator) {
+                    // must evaluate result async and resume later
+                    break;
+                } else {
+                    // store result now and proceed
+                    results[i] = that.json_safe(result, level);
+                }
+            }
+            if (evaluator) {
+                // The evaluation loop has been stopped by an async operation.
+                // evaluate at evaluation_index async and resume later
+                var resolver = function(value_for_command) {
+                    // store the calculated result
+                    results[evaluation_index] = value_for_command;
+                    // continue evaluating any remaining commands, starting at the next command
+                    return that.resume_execute_commands(results, command_list, command_counter, level,
+                        evaluation_index+1)
+                };
+                // call the async evaluator
+                evaluator(resolver);
+            } else {
+                // evaluation complete: send results
+                that.send_custom_message(that.RESULTS, [command_counter, results])
+                return results
+            }
+        } catch (err) {
+            var msg = "" + err;
+            results.push(msg);
+            that.set_error_msg(msg);
+        }
     },
 
     send_custom_message: function(indicator, payload) {
@@ -222,9 +272,20 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         }
     },
 
+    execute_command_result: function(command) {
+        // execute the command and ignore the evaluator if provided
+        return this.execute_command(command).result;
+    },
+
     execute_command: function(command) {
         var that = this;
         var result = command;
+        // evaluator, if set is a function evaluator(resolver)
+        //   which promises to eventually call resolver(value_for_command)
+        //   perhaps after a few event loop iterations...
+        // evaluator is ignored except at the top level evaluation loop
+        //   where it takes precedence over the result.
+        var evaluator = null;
         if (jquery_.isArray(command)) {
             var indicator = command[0];
             var remainder = command.slice();
@@ -239,9 +300,9 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                 result = window;
             } else if (indicator == "method") {
                 var target_desc = remainder.shift();
-                var target = that.execute_command(target_desc);
+                var target = that.execute_command_result(target_desc);
                 var name = remainder.shift();
-                var args = remainder.map(that.execute_command, that);
+                var args = remainder.map(that.execute_command_result, that);
                 var method = target[name];
                 if (method) {
                     result = method.apply(target, args);
@@ -250,20 +311,20 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                 }
             } else if (indicator == "function") {
                 var function_desc = remainder.shift();
-                var function_value = that.execute_command(function_desc);
-                var args = remainder.map(that.execute_command, that);
+                var function_value = that.execute_command_result(function_desc);
+                var args = remainder.map(that.execute_command_result, that);
                 // Use "that" as the "this" value for function values?
                 result = function_value.apply(that, args);
             } else if (indicator == "id") {
                 result = remainder[0];
             } else if (indicator == "list") {
-                result = remainder.map(that.execute_command, that);
+                result = remainder.map(that.execute_command_result, that);
             } else if (indicator == "dict") {
                 result = {}
                 var desc = remainder[0];
                 for (var key in desc) {
                     var key_desc = desc[key];
-                    var val = that.execute_command(key_desc);
+                    var val = that.execute_command_result(key_desc);
                     result[key] = val;
                 }
             } else if (indicator == "callback") {
@@ -276,7 +337,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                 result = that.callback_factory(identifier, data, level, segmented);
             } else if (indicator == "get") {
                 var target_desc = remainder.shift();
-                var target = that.execute_command(target_desc);
+                var target = that.execute_command_result(target_desc);
                 var name = remainder.shift();
                 try {
                     result = target[name];
@@ -286,24 +347,143 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                 }
             } else if (indicator == "set") {
                 var target_desc = remainder.shift();
-                var target = that.execute_command(target_desc);
+                var target = that.execute_command_result(target_desc);
                 var name = remainder.shift();
                 var value_desc = remainder.shift()
-                var value = that.execute_command(value_desc);
+                var value = that.execute_command_result(value_desc);
                 target[name] = value;
                 result = target;
             } else if (indicator == "null") {
                 target_desc = remainder.shift();
-                that.execute_command(target_desc);
+                that.execute_command_result(target_desc);
                 result = null;
+            } else if (indicator == "load_css") {
+                result = "load_css_async";
+                css_name = remainder.shift();
+                css_text = remainder.shift();
+                evaluator = that.load_css_async(css_name, css_text);
+            } else if (indicator == "load_js") {
+                result = "load_javascript_async";
+                js_name = remainder.shift();
+                js_text = remainder.shift();
+                evaluator = that.load_js_async(js_name, js_text);
             } else if (indicator == "bytes") {
                 var hexstr = remainder[0];
-                result = this.from_hex(hexstr);
+                result = that.from_hex(hexstr);
             } else {
-                result = "Unknown indicator " + indicator;
+                var msg = "Unknown command indicator " + indicator;
+                result = msg;
+                that.set_error_msg(msg);
             }
         }
-        return result;
+        //return result;
+        return {result: result, evaluator: evaluator};
+    },
+
+    load_css_async: function(css_name, css_text) {
+        // Return a function evaluator(resolver)
+        // which promises to load the css_text and call the
+        // resolver() when the load is complete.
+        var that = this;
+        var evaluator = function(resolver) {
+            // if the sheet already exists, just succeed
+            if (that.sheet_name_exists(css_name)) {
+                return resolver(css_name);
+            }
+            // otherwise create the style and wait for stylesheet
+            that.$$el.jQuery("<style>")
+            .prop("type", "text/css")
+            .prop("title", css_name)
+            .html("\n"+css_text)
+            .appendTo("head");
+            // loop a while waiting for the stylesheet to appear.
+            var done_test = function() {
+                return that.sheet_name_exists(css_name);
+            };
+            return that.evaluation_test_polling_loop(done_test, css_name, resolver);
+        };
+        return evaluator;
+    },
+
+    evaluation_test_polling_loop: function(eval_test, resolve_value, resolver) {
+        var count = 0;
+        var limit = 100;
+        var wait_milliseconds = 10;
+        var test_poll = function () {
+            count += 1;
+            if (eval_test()) {
+                return resolver(resolve_value)
+            }
+            // otherwise try again, maybe
+            if (count < limit) {
+                setTimeout(test_poll, wait_milliseconds);
+            } else {
+                var message = "timeout awaiting " + resolve_value;
+                that.set_error_msg(message);
+                return resolver(message);
+            }
+        };
+        test_poll();
+    },
+
+    sheet_name_exists: function(css_name) {
+        // test if a css sheet name is known
+        var sheets = document.styleSheets;
+        for (var i=0; i<sheets.length; i++) {
+            var sheet = sheets[i];
+            if (sheet.title == css_name) {
+                return true;
+            }
+        }
+        return false;
+    },
+
+    // cache of name to [completion status, text] for loaded javascript
+    loaded_js_by_name: {},
+
+    load_js_async: function(js_name, js_text) {
+        // Return a function evaluator(resolver)
+        // which promises to load the css_text and call the
+        // resolver() when the load is complete.
+        var that = this;
+        var evaluator = function(resolver) {
+            // we are done when the loaded javascript matches and is marked complete.
+            var done_test = function() {
+                var load_entry = that.loaded_js_by_name[js_name];
+                if (load_entry) {
+                    var status = load_entry[0];
+                    var loaded_text = load_entry[1];
+                    if ((status) && (loaded_text == js_text)) {
+                        return true;
+                    }
+                };
+                return false;
+            };
+            // if the text is already loading, wait for completion
+            var load_entry = that.loaded_js_by_name[js_name];
+            if ((load_entry) && (load_entry[1] == js_text)) {
+                return that.evaluation_test_polling_loop(done_test, js_name, resolver);
+            };
+            // otherwise install the javascript...
+            var all_done = function() {
+                // when done mark the text as loaded
+                that.loaded_js_by_name[js_name] = [true, js_text];
+            };
+            // before done, mark the text as loading but not complete
+            that.loaded_js_by_name[js_name] = [false, js_text];
+            // compile the text wrapped in an anonymous function
+            var function_body = [
+                "debugger;",
+                "(function() {",
+                js_text,
+                "})();",
+                "all_done();"
+            ].join("\n");
+            var js_text_fn = Function("all_done", function_body);
+            // execute the code and completion call
+            return js_text_fn(all_done);
+        };
+        return evaluator;
     },
 
     check_level: function(level) {
