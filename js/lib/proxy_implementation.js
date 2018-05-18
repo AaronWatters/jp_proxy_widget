@@ -308,6 +308,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                     result = method.apply(target, args);
                 } else {
                     result = "In " + target + " no such method " + name;
+                    that.set_error_msg(result);
                 }
             } else if (indicator == "function") {
                 var function_desc = remainder.shift();
@@ -481,7 +482,9 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             ].join("\n");
             var js_text_fn = Function("all_done", function_body);
             // execute the code and completion call
-            return js_text_fn(all_done);
+            js_text_fn(all_done);
+            // resolve
+            return resolver(js_name);
         };
         return evaluator;
     },

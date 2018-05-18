@@ -234,6 +234,9 @@ class JSProxyWidget(widgets.DOMWidget):
 
     error_msg = traitlets.Unicode("No error", sync=True)
 
+    # increment this after every flush to force a sync?
+    _send_counter = traitlets.Integer(0, sync=True)
+
     # traitlet port to receive results of commands from javascript
     #results = traitlets.List([], sync=True)
 
@@ -424,7 +427,9 @@ class JSProxyWidget(widgets.DOMWidget):
         "send the buffered commands and clear the buffer. Convenience."
         commands = self.buffered_commands
         self.buffered_commands = []
-        return self.send_commands(commands, results_callback, level, segmented=segmented)
+        result = self.send_commands(commands, results_callback, level, segmented=segmented)
+        self._send_counter += 1
+        return result
 
     def save(self, name, reference):
         """
@@ -898,7 +903,7 @@ class ElementWrapper(object):
 
     def __init__(self, for_widget):
         self.widget = for_widget
-        self.widget_element = widget.get_element()
+        self.widget_element = for_widget.get_element()
 
     def __getattr__(self, name):
         return ElementCallWrapper(self.widget, self.widget_element, name)
@@ -918,11 +923,12 @@ class ElementCallWrapper(object):
     def __init__(self, for_widget, for_element, slot_name):
         self.widget = for_widget
         self.element = for_element
+        self.slot_name = slot_name
 
     def __call__(self, *args):
         widget = self.widget
         element = self.element
-        slot = element[slot_name]
+        slot = element[self.slot_name]
         widget(slot(*args))
 
 
