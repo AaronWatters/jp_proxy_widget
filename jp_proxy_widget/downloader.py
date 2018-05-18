@@ -34,8 +34,9 @@ def load_file_saver(to_proxy_widget, sleep=0.1):
 def saveAsUnicode(to_widget, file_name, unicode_string, type="text/plain;charset=utf-8"):
     w = to_widget
     load_file_saver(w)
-    element = w.element()
-    w(element.download(file_name, unicode_string, type))
+    #element = w.element()
+    #w(element.download(file_name, unicode_string, type))
+    w.element.download(file_name, unicode_string, type)
     w.seg_flush()
 
 def saveAsBinary(to_widget, file_name, byte_sequence, type="octet/stream"):
@@ -43,6 +44,7 @@ def saveAsBinary(to_widget, file_name, byte_sequence, type="octet/stream"):
     data = bytearray(byte_sequence)
     w = to_widget
     load_file_saver(w)
-    element = w.element()
-    w(element.download(file_name, data, type))
+    #element = w.element()
+    #w(element.download(file_name, data, type))
+    w.element.download(file_name, data, type)
     w.seg_flush()
