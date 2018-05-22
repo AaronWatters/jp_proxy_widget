@@ -38,35 +38,54 @@ var module_name_to_text = {};
 //var loader_defined = false;
 var JSProxyLoad = "JSProxyLoad";
 
+/* xxxxx delete ...
+
 // Alias the require.js define and require functions.  xxxx is there a better way?
 //var requirejs = window["require"];
 //var definejs = window["define"];
 
+var loader_is_defined = false;
+
 // Define the loader at the last minute...
 var define_loader = function(element) {
-    if (!element.requirejs.defined(JSProxyLoad)) {
-        module_name_to_text = [];
-        element.definejs(JSProxyLoad, [], function() {
-            return {
-                normalize: function(name, _) {
-                    return name; // is this needed?
-                },
-                load: function (name, req, onload, config) {
-                    var text = module_name_to_text[name];
-                    onload.fromText(text);
-                    // delete the text? xxxx
-                }
-            };
-        });
-        // self test.
-        var dummy_text = 'define([], function() { console.log("loading dummy..."); return " dummy value!! "; })';
-        module_name_to_text["xxxdummy"] = dummy_text;
-        element.requirejs([JSProxyLoad + "!xxxdummy"], function(the_value) {
-            console.log("JSProxyLoad for xxx_dummy succeeded. " + the_value);
-        });
+    // cl("define_loader called");
+    if (element.requirejs) {
+        if (!loader_is_defined) {
+            // cl("defining JSProxy loader");
+            module_name_to_text = [];
+            element.definejs(JSProxyLoad, [], function() {
+                // cl("defining " + JSProxyLoad);
+                return {
+                    normalize: function(name, _) {
+                        // cl(JSProxyLoad + " normalizing " + name);
+                        return name; // is this needed?
+                    },
+                    load: function (name, req, onload, config) {
+                        // cl(JSProxyLoad + " loading " + name);
+                        var text = module_name_to_text[name];
+                        onload.fromText(text);
+                        // delete the text? xxxx
+                    }
+                };
+            });
+            // self test.
+            var test_name = "xxxdummy";
+            var dummy_text = 'define([], function() { console.log("loading dummy..."); return " dummy value!! "; })';
+            module_name_to_text[test_name] = dummy_text;
+            console.log(JSProxyLoad + "running self-test");
+            element.requirejs([JSProxyLoad + "!" + test_name], function(the_value) {
+                console.log("JSProxyLoad for xxx_dummy succeeded. " + the_value);
+            });
+        }
+        loader_is_defined = true;
+        console.log("define_loader complete");
+    } else {
+        element.set_error_msg("cannot define_loader when element.requirejs is not defined.")
     }
-    //loader_defined = true;
-}
+};
+
+xxxxx
+*/
 
 // Custom View. Renders the widget model.
 var JSProxyView = widgets.DOMWidgetView.extend({
@@ -78,6 +97,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         this.el.textContent = "Uninitialized Proxy Widget";
 
         that._json_accumulator = [];
+
         that.on("displayed", function() {
             that.update();
         });
@@ -85,6 +105,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         that.model.on("msg:custom", function(content, buffers, widget) {
             that.handle_custom_message(content, buffers, widget);
         })
+
         // Wrap $el as a proper jQuery object
         // This is the "element" exposed on the Python side.
         if (window["jQuery"]) {
@@ -99,28 +120,150 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         that.$$el.jQuery = jquery_;
         that.$$el._ = _;
 
-        // store aliases to the require and define functions (if available)
-        that.$$el.alias_require = function () {
-            that.$$el.requirejs = window["require"];
-            that.$$el.definejs = window["define"];
+        // trigger callbacks if vanilla javascript modules have/have not been loaded.
+        // no-op callbacks can be falsy.
+        that.$$el.test_js_loaded = function(names, is_loaded_callback, not_loaded_callback, silent) {
+            var all_loaded = true;
+            for (var i=0; i<names.length; i++) {
+                var name = names[i];
+                var name_is_loaded = false;
+                var status = that.loaded_js_by_name[name];
+                if (status) {
+                    complete = status[0];
+                    if (complete) {
+                        if (is_loaded_callback) {
+                            is_loaded_callback();
+                        }
+                        name_is_loaded =true;
+                    }
+                }
+                if (!name_is_loaded) {
+                    all_loaded = false;
+                }
+            }
+            if (all_loaded) {
+                if (is_loaded_callback) {
+                    is_loaded_callback();
+                }
+            } else {
+                if (not_loaded_callback) {
+                    not_loaded_callback();
+                } else if (!silent) {
+                    that.set_error_msg("test_js_loaded failed " + names);
+                }
+            }
+            return all_loaded;
         };
-        // May have to call this again after loading require if needed.
-        that.$$el.alias_require();
+
+        // execute action when vanilla javascript modules have been loaded
+        //  xxxx this duplicates logic in load_js_command below?
+        that.$$el.when_loaded = function(names, action, failure, delay, limit) {
+            if (!delay) {
+                delay = 10;
+            }
+            if (!limit) {
+                limit = 1000;
+            }
+            var counter = 0;
+            var attempt_action = function () {
+                counter += delay;
+                // test for load silently.
+                if (that.$$el.test_js_loaded(names, null, null, true)) {
+                    return action();
+                }
+                // otherwise try again later, maybe
+                if (counter < limit) {
+                    return setTimeout(attempt_action, delay);
+                } else {
+                    if (failure) {
+                        return failure();
+                    } else {
+                        that.set_error_msg("when loaded timed out waiting for " + names);
+                    }
+                }
+            }
+            attempt_action();
+        };
+
+        that.$el.set_error_msg = function(msg) {
+            that.set_error_msg(msg);
+        };
+
+        // Store aliases to the require and define functions (if available).
+        // Call the failure callback if the functions cannot be found.
+        that.$$el.alias_require = function (success_callback, failure_callback) {
+            var window_require = window["require"];
+            if (window_require) {
+                that.$$el.requirejs = window["require"];
+                that.$$el.definejs = window["define"];
+                console.log("alias require succeeded.");
+                if (success_callback) {
+                    success_callback();
+                }
+            } else if (failure_callback) {
+                console.log("alias require failed");
+                failure_callback();
+            }
+        };
 
         // _load_js_module function
         // Load a require.js module and store the loaded object as $$el[name].
         // note that there is a hypothetical delay before the module becomes available.
         that.$$el._load_js_module = function(name, text) {
+            console.log("load js module " + name);
+            // require js must be loaded previously somehow
+            that.$$el.alias_require()
             if (that.$$el.requirejs) {
+                var definejs = that.$$el.definejs;
+                var redefiner = function(name) {
+                    var define_replacement = function (a, b, c) {
+                        var defined_name = name;
+                        var requirements;
+                        var defining_function;
+                        if ((typeof a) == "string") {
+                            // console.log("renamed define "+a+" : "+name);
+                            defined_name = a;
+                            requirements = b;
+                            defining_function = c;
+                        } else {
+                            // console.log("de-anonymized define: " + name);
+                            requirements = a;
+                            defining_function = b;
+                        }
+                        console.log("defining " + defined_name);
+                        definejs(defined_name, requirements, defining_function);
+                        if (defined_name != name) {
+                            console.log("  ...and also defining " + name);
+                            definejs(name, requirements, defining_function);
+                        }
+                    };
+                    if ((((typeof definejs) !== "undefined") && (definejs !== null)) && (definejs.amd !== null)) {
+                        define_replacement.amd = definejs.amd;
+                    }
+                    return define_replacement;
+                };
+                // evaluate the text in an anonymous function with "define" rebound using redefiner(name)
+                var js_text_fn = Function("define", text);
+                js_text_fn(redefiner(name));
+                /* xxxx delete
                 define_loader(that.$$el);
-                // store the text in global dictionary for use by the plugin
+                // store the text in global dictionary for use by the JSProxyLoad require plugin
                 module_name_to_text[name] = text;
                 // use the require.js plugin above to load the module, then store it in $$el when done.
-                that.$$el.requirejs([JSProxyLoad + "!" + name], function(the_module) {
-                    that.$$el[name] = the_module;
+                //that.$$el.requirejs([JSProxyLoad + "!" + name], function(the_module) {
+                //    that.$$el[name] = the_module;
+                //});
+                // define the module using the name directly without the plugin prefix
+                that.$$el.requirejs([JSProxyLoad], function () {
+                    console.log("defining jsproxy module " + name);
+                    that.$$el.definejs(name, [JSProxyLoad + "!" + name], function(the_module) {
+                        console.log("JSProxyLoad loaded module " + name);
+                        return the_module;
+                    });
                 });
+                xxxx */
             } else {
-                var msg = "Cannot load_js_module if requirejs is not avaiable";
+                var msg = "Cannot load_js_module if requirejs is not available: " + name;
                 that.set_error_msg(msg);
                 return msg;
             }
@@ -129,8 +272,14 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         // "new" keyword emulation
         // http://stackoverflow.com/questions/17342497/dynamically-control-arguments-while-creating-objects-in-javascript
         that.$$el.New = function(klass, args) {
-            var obj = Object.create(klass.prototype);
-            return klass.apply(obj, args) || obj;
+            try {
+                var obj = Object.create(klass.prototype);
+                return klass.apply(obj, args) || obj;
+            } catch (err) {
+                var msg = "Error in element.New " + err;
+                that.set_error_msg(msg);
+                throw new Error(msg);
+            }
         };
 
         // fix key bindings for wayward element.
@@ -149,6 +298,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         that.error_msg = message;
         that.model.set("error_msg", message);
         that.touch();
+        console.error("proxy widget: " + message)
     },
 
     // String constants for messaging
@@ -170,10 +320,12 @@ var JSProxyView = widgets.DOMWidgetView.extend({
     },
 
     execute_commands: function(commands) {
+        // cl("execute_commands " + commands.length);
         var that = this;
         var results = [];
         if (commands && commands.length >= 2) {
             var command_counter = commands[0];
+            // cl("command_counter=" + command_counter)
             var command_list = commands[1];
             var level = commands[2];
             level = that.check_level(level);
@@ -233,6 +385,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                 evaluator(resolver);
             } else {
                 // evaluation complete: send results
+                // cl(command_counter + " execute commands done " + results.length);
                 that.send_custom_message(that.RESULTS, [command_counter, results])
                 return results
             }
@@ -268,7 +421,8 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             var commands = JSON.parse(json_str);
             that.execute_commands(commands);
         } else {
-            console.log("invalid custom message indicator " + indicator);
+            var msg = "invalid custom message indicator " + indicator;
+            that.set_error_msg(msg);
         }
     },
 
@@ -303,6 +457,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                 var target = that.execute_command_result(target_desc);
                 var name = remainder.shift();
                 var args = remainder.map(that.execute_command_result, that);
+                // cl("method call " + target + "." + name);
                 var method = target[name];
                 if (method) {
                     result = method.apply(target, args);
@@ -446,6 +601,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         // Return a function evaluator(resolver)
         // which promises to load the css_text and call the
         // resolver() when the load is complete.
+        console.log("load_js_async " + js_name);
         var that = this;
         var evaluator = function(resolver) {
             // we are done when the loaded javascript matches and is marked complete.
@@ -466,26 +622,33 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                 return that.evaluation_test_polling_loop(done_test, js_name, resolver);
             };
             // otherwise install the javascript...
-            var all_done = function() {
-                // when done mark the text as loaded
-                that.loaded_js_by_name[js_name] = [true, js_text];
-            };
+            //var all_done = function() {
+            //    // when done mark the text as loaded
+            //    that.loaded_js_by_name[js_name] = [true, js_text];
+            //};
             // before done, mark the text as loading but not complete
             that.loaded_js_by_name[js_name] = [false, js_text];
-            // compile the text wrapped in an anonymous function
+            // compile the text NOT wrapped in an anonymous function
             var function_body = [
-                "debugger;",
-                "(function() {",
+                //"debugger;",
+                // "(function() {",
+                'console.log("eval-loading ' + js_name + '");',
                 js_text,
-                "})();",
-                "all_done();"
+                // "})();",
+                //"all_done();"
             ].join("\n");
-            var js_text_fn = Function("all_done", function_body);
+            //var js_text_fn = Function("all_done", function_body);
             // execute the code and completion call
-            js_text_fn(all_done);
+            //js_text_fn(all_done);
+            // Evaluate in global context!
+            eval.call(window, function_body);
+            // mark as complete.
+            that.loaded_js_by_name[js_name] = [true, js_text];
+            // cl("resolving load for " + js_name);
             // resolve
             return resolver(js_name);
         };
+        // cl("returning load evaluator load_js_async " + js_name);
         return evaluator;
     },
 

@@ -107,8 +107,6 @@ PASSED TO PYTHON: None
 
 """
 
-#print "this should be a syntax error in py3"
-
 import ipywidgets as widgets
 from traitlets import Unicode
 import time
@@ -123,6 +121,7 @@ from . import js_context
 from .hex_codec import hex_to_bytearray, bytearray_to_hex
 
 
+"""
 def load_components(verbose=False):
     # shortcut will not work correctly if window has been reloaded.
     #if JSProxyWidget._jqueryUI_checked and JSProxyWidget._require_checked:
@@ -146,7 +145,7 @@ def load_components(verbose=False):
         if verbose:
             print ("requirejs loaded")
     w._check_require_is_loaded(onsuccess=requirejs_loaded)
-
+"""
 
 # In the IPython context get_ipython is a builtin.
 # get a reference to the IPython notebook object.
@@ -260,6 +259,7 @@ class JSProxyWidget(widgets.DOMWidget):
         #self.on_trait_change(self.handle_callback_results, "callback_results")
         #self.on_trait_change(self.handle_results, "results")
         self.on_trait_change(self.handle_rendered, "rendered")
+        self.on_trait_change(self.handle_error_msg, "error_msg")
         ##pr "registered on_msg(handle_custom_message)"
         self.on_msg(self.handle_custom_message_wrapper)
         self.buffered_commands = []
@@ -287,14 +287,31 @@ class JSProxyWidget(widgets.DOMWidget):
         function = self.function(argument_names, js_function_body)
         function_call = function(*argument_values)
         # execute the function call on the javascript side.
-        self(function_call)
-        self.flush()
+        def action():
+            self(function_call)
+            self.flush()
+        if self._needs_requirejs:
+            # defer action until require is defined
+            self.uses_require(action)
+        else:
+            # just execute it
+            action()
+
+    print_on_error = True
+
+    def handle_error_msg(self, att_name, old, new):
+        if self.print_on_error:
+            print("new error message: " + new)
 
     def handle_rendered(self, att_name, old, new):
         "when rendered send any commands awaiting the render event."
-        if self.commands_awaiting_render:
-            self.send_commands([])
-        self.status= "Rendered."
+        try:
+            if self.commands_awaiting_render:
+                self.send_commands([])
+            self.status= "Rendered."
+        except Exception as e:
+            self.error_msg = repr(e)
+            raise
 
     def send_custom_message(self, indicator, payload):
         package = { 
@@ -501,42 +518,68 @@ class JSProxyWidget(widgets.DOMWidget):
         #pr("exitting checkjQuery")
 
     _require_checked = False
+    _needs_requirejs = False
+    _delayed_require_actions = None
 
-    def _check_require_is_loaded(self, filepath="js/require.js", onsuccess=None):
+    def uses_require(self, action=None, filepath="js/require.js"):
         """
         Force load require.js if window.require is not yet available.
         """
-        # xxx shortcut will not work in lab after reload
-        #if JSProxyWidget._require_checked:
-        #    if onsuccess:
-        #        onsuccess()
-        #    # Don't need to check twice.
-        #    return
+        # For subsequent actions wait for require to have loaded before executing
+        self._needs_requirejs = True
+        # this is a sequence of message callbacks:
+        if self._require_checked:
+            # just do it
+            if action:
+                action()
+            return
+        # uses_require actions should be done in order.
+        # delay subsequent actions until this action is complete
+        # NOTE: if communications fail this mechanism may lock up the widget.
+        delayed = self._delayed_require_actions
+        if delayed:
+            # do this action when the previous delayed actions are complete
+            # pr("delaying action because uses_require is in process")
+            if action:
+                delayed.append(action)
+            return
+        # otherwise this is the first delayed action
+        if action:
+            self._delayed_require_actions = [action]
+        def check_require():
+            "alias require/define or load it if is not available."
+            # pr ("calling alias_require")
+            self.element.alias_require(load_succeeded, load_require)
+        def load_require():
+            "load require.js and validate the load, fail on timeout"
+            # pr ("loading " + filepath)
+            self.load_js_files([filepath])
+            # pr ("calling when loaded " + filepath)
+            self.element.when_loaded([filepath], validate_require, load_failed)
+        def validate_require():
+            # pr ("validating require load")
+            self.element.alias_require(load_succeeded, load_failed)
         def load_failed():
             raise ImportError("Failed to load require.js in javascript context.")
         def load_succeeded():
             JSProxyWidget._require_checked = True
-            if onsuccess:
-                onsuccess()
-        def load_require_js():
-            self.load_js_files([filepath])
-            self.js_init("""
-                console.log("proxy widget: assigning require aliases.");
-                element.alias_require();
-                if (element.requirejs) {
-                    load_succeeded();
-                } else {
-                    load_failed();
-                }
-            """, load_failed=load_failed, load_succeeded=load_succeeded)
-        self.js_init("""
-            console.log("checking for requirejs");
-            if (element.requirejs) {
-                load_succeeded();
-            } else {
-                load_require_js();
-            }
-        """, load_require_js=load_require_js, load_succeeded=load_succeeded)
+            #if action:
+            #    action()
+            # execute all delayed actions in insertion order
+            delayed = self._delayed_require_actions
+            while delayed:
+                current_action = delayed[0]
+                del delayed[0]
+                try:
+                    current_action()
+                except Exception as e:
+                    self.error_msg = "require.js delayed action exception " + repr(e)
+                    self._delayed_require_actions[:] = []
+                    return
+            self._delayed_require_actions = None
+        # Start the async message sequence
+        # pr ("checking require")
+        check_require()
 
     def load_css(self, filepath, local=True):
         """
@@ -550,20 +593,23 @@ class JSProxyWidget(widgets.DOMWidget):
     def require_js(self, name, filepath, local=True):
         """
         Load a require.js module from a file accessible by Python.
+        Define the module content using the name in the requirejs module system.
         """
-        text = js_context.get_text_from_file_name(filepath, local)
-        return self.load_js_module_text(name, text)
+        def load_it():
+            text = js_context.get_text_from_file_name(filepath, local)
+            return self.load_js_module_text(name, text)
+        self.uses_require(load_it)
 
     def load_js_module_text(self, name, text):
         """
         Load a require.js module text.
-        Later the module content will be available as self.get_element()[name].
         """
-        elt = self.get_element()
-        load_call = elt._load_js_module(name, text)
-        self(load_call)
+        return self.element._load_js_module(name, text);
+        #elt = self.get_element()
+        #load_call = elt._load_js_module(name, text)
+        #self(load_call)
         # return reference to the loaded module
-        return getattr(elt, name)
+        #return getattr(elt, name)
 
     def save_new(self, name, constructor, arguments):
         """
@@ -714,6 +760,9 @@ class JSProxyWidget(widgets.DOMWidget):
         will trigger calls to function_or_method(x, y, z)
         where x, y, z are json compatible values.
         """
+        # do not double wrap CallMakers
+        if isinstance(function_or_method, CallMaker):
+            return function_or_method
         data = repr(function_or_method)
         def callback_function(_data, arguments):
             count = 0
@@ -779,12 +828,22 @@ class JSProxyWidget(widgets.DOMWidget):
         return CommandMaker("window")
 
     def load_js_files(self, filenames, verbose=False, delay=0.1, force=False, local=True):
+        #  xxxx  Use that.$$el.test_js_loaded to only load the module if needed when force is False
         #import js_context
         #js_context.load_if_not_loaded(self, filenames, verbose=verbose, delay=delay, force=force, local=local)
         for filepath in filenames:
-            filetext = js_context.get_text_from_file_name(filepath, local=True)
-            cmd = self.load_js_command(filepath, filetext)
-            self(cmd)
+            def load_the_file(filepath=filepath):
+                # pr ("loading " + filepath)
+                filetext = js_context.get_text_from_file_name(filepath, local=True)
+                cmd = self.load_js_command(filepath, filetext)
+                self(cmd)
+            if force:
+                load_the_file()
+            else:
+                # only load the file if no file of that name has been loaded
+                load_callback = self.callable(load_the_file)
+                # pr ("test/loading " + filepath + " " + repr(load_callback))
+                self.element.test_js_loaded([filepath], None, load_callback)
 
     def load_js_command(self, js_name, js_text):
         return Loader(LOAD_JS, js_name, js_text)
@@ -920,16 +979,25 @@ class ElementWrapper(object):
 
 class ElementCallWrapper(object):
 
+    callable_level = 2   # ???
+
     def __init__(self, for_widget, for_element, slot_name):
         self.widget = for_widget
         self.element = for_element
         self.slot_name = slot_name
+    
+    def map_value(self, v):
+        widget = self.widget
+        if callable(v):
+            return widget.callable(v, level=self.callable_level)
+        return v
 
     def __call__(self, *args):
+        mapped_args = map(self.map_value, args)
         widget = self.widget
         element = self.element
         slot = element[self.slot_name]
-        widget(slot(*args))
+        widget(slot(*mapped_args))
 
 
 class CommandMaker(object):
@@ -1024,7 +1092,7 @@ class SetMaker(CommandMaker):
 
 class Loader(CommandMaker):
     """
-    Special commends for loading css and js async.
+    Special commands for loading css and js async.
     """
 
     def __init__(self, indicator, name, text_content):
