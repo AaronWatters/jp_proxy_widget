@@ -38,55 +38,6 @@ var module_name_to_text = {};
 //var loader_defined = false;
 var JSProxyLoad = "JSProxyLoad";
 
-/* xxxxx delete ...
-
-// Alias the require.js define and require functions.  xxxx is there a better way?
-//var requirejs = window["require"];
-//var definejs = window["define"];
-
-var loader_is_defined = false;
-
-// Define the loader at the last minute...
-var define_loader = function(element) {
-    // cl("define_loader called");
-    if (element.requirejs) {
-        if (!loader_is_defined) {
-            // cl("defining JSProxy loader");
-            module_name_to_text = [];
-            element.definejs(JSProxyLoad, [], function() {
-                // cl("defining " + JSProxyLoad);
-                return {
-                    normalize: function(name, _) {
-                        // cl(JSProxyLoad + " normalizing " + name);
-                        return name; // is this needed?
-                    },
-                    load: function (name, req, onload, config) {
-                        // cl(JSProxyLoad + " loading " + name);
-                        var text = module_name_to_text[name];
-                        onload.fromText(text);
-                        // delete the text? xxxx
-                    }
-                };
-            });
-            // self test.
-            var test_name = "xxxdummy";
-            var dummy_text = 'define([], function() { console.log("loading dummy..."); return " dummy value!! "; })';
-            module_name_to_text[test_name] = dummy_text;
-            console.log(JSProxyLoad + "running self-test");
-            element.requirejs([JSProxyLoad + "!" + test_name], function(the_value) {
-                console.log("JSProxyLoad for xxx_dummy succeeded. " + the_value);
-            });
-        }
-        loader_is_defined = true;
-        console.log("define_loader complete");
-    } else {
-        element.set_error_msg("cannot define_loader when element.requirejs is not defined.")
-    }
-};
-
-xxxxx
-*/
-
 // Custom View. Renders the widget model.
 var JSProxyView = widgets.DOMWidgetView.extend({
 
@@ -245,23 +196,6 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                 // evaluate the text in an anonymous function with "define" rebound using redefiner(name)
                 var js_text_fn = Function("define", text);
                 js_text_fn(redefiner(name));
-                /* xxxx delete
-                define_loader(that.$$el);
-                // store the text in global dictionary for use by the JSProxyLoad require plugin
-                module_name_to_text[name] = text;
-                // use the require.js plugin above to load the module, then store it in $$el when done.
-                //that.$$el.requirejs([JSProxyLoad + "!" + name], function(the_module) {
-                //    that.$$el[name] = the_module;
-                //});
-                // define the module using the name directly without the plugin prefix
-                that.$$el.requirejs([JSProxyLoad], function () {
-                    console.log("defining jsproxy module " + name);
-                    that.$$el.definejs(name, [JSProxyLoad + "!" + name], function(the_module) {
-                        console.log("JSProxyLoad loaded module " + name);
-                        return the_module;
-                    });
-                });
-                xxxx */
             } else {
                 var msg = "Cannot load_js_module if requirejs is not available: " + name;
                 that.set_error_msg(msg);

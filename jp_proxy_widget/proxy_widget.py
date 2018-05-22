@@ -120,33 +120,6 @@ import traceback
 from . import js_context
 from .hex_codec import hex_to_bytearray, bytearray_to_hex
 
-
-"""
-def load_components(verbose=False):
-    # shortcut will not work correctly if window has been reloaded.
-    #if JSProxyWidget._jqueryUI_checked and JSProxyWidget._require_checked:
-    #    if verbose:
-    #        print("Components loaded previously.")
-    #    return
-    w = JSProxyWidget()
-    w.visible = False
-    show = w
-    w.js_init("element.html('&nbsp;')")  # "no" visible content for widget
-    if verbose:
-        show = w.debugging_display(tagline="Checking/loading javascript helpers for proxy widgets:")
-    display(show)
-    # add require after adding jquery
-    #   xxxx really should add registration for jquery and jqueryui with requirejs if it is available...
-    def jquery_loaded():
-        if verbose:
-            print ("jQuery and jQueryUI loaded")
-    w.check_jquery(onsuccess=jquery_loaded)
-    def requirejs_loaded():
-        if verbose:
-            print ("requirejs loaded")
-    w._check_require_is_loaded(onsuccess=requirejs_loaded)
-"""
-
 # In the IPython context get_ipython is a builtin.
 # get a reference to the IPython notebook object.
 ip = IPython.get_ipython()
