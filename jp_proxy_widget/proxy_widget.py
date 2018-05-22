@@ -800,7 +800,7 @@ class JSProxyWidget(widgets.DOMWidget):
         "Return a proxy reference to the browser window top level name space."
         return CommandMaker("window")
 
-    def load_js_files(self, filenames, verbose=False, delay=0.1, force=False, local=True):
+    def load_js_files(self, filenames, force=True, local=True):
         #  xxxx  Use that.$$el.test_js_loaded to only load the module if needed when force is False
         #import js_context
         #js_context.load_if_not_loaded(self, filenames, verbose=verbose, delay=delay, force=force, local=local)
@@ -811,6 +811,7 @@ class JSProxyWidget(widgets.DOMWidget):
                 cmd = self.load_js_command(filepath, filetext)
                 self(cmd)
             if force:
+                # this may result in reading and sending the file content too many times...
                 load_the_file()
             else:
                 # only load the file if no file of that name has been loaded
