@@ -483,7 +483,8 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             // otherwise create the style and wait for stylesheet
             that.$$el.jQuery("<style>")
             .prop("type", "text/css")
-            .prop("title", css_name)
+            //.prop("title", css_name)
+            .prop("href", css_name)
             .html("\n"+css_text)
             .appendTo("head");
             // loop a while waiting for the stylesheet to appear.
@@ -496,6 +497,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
     },
 
     evaluation_test_polling_loop: function(eval_test, resolve_value, resolver) {
+        var that = this;
         var count = 0;
         var limit = 100;
         var wait_milliseconds = 10;
@@ -521,8 +523,8 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         var sheets = document.styleSheets;
         for (var i=0; i<sheets.length; i++) {
             var sheet = sheets[i];
-            if (sheet.title == css_name) {
-                return true;
+            if ((sheet.ownerNode) && (sheet.ownerNode.href == css_name)) { // (sheet.title == css_name) {
+                return sheet;
             }
         }
         return false;

@@ -437,58 +437,20 @@ class JSProxyWidget(widgets.DOMWidget):
 
     _jqueryUI_checked = False
 
-    def check_jquery(self, 
+    def check_jquery(self, onsuccess=None, force=False,
         code_fn="js/jquery-ui-1.12.1/jquery-ui.js", 
-        style_fn="js/jquery-ui-1.12.1/jquery-ui.css",
-        sleep_delay=0.2, onsuccess=None):
+        style_fn="js/jquery-ui-1.12.1/jquery-ui.css"):
         """
         Make JQuery and JQueryUI globally available for other modules.
         """
-        # check whether any widget in this context has loaded jqueryUI
-        # xxx shortcut will not work in lab after reload
-        #if JSProxyWidget._jqueryUI_checked:
-        #    if onsuccess:
-        #        onsuccess()
-        #    return  # Don't need to check twice
-        def load_failed():
-            raise ImportError("Failed to load JQueryUI in javascript context.")
-        def load_succeeded():
-            # mark successful load for interpreter context.
-            JSProxyWidget._jqueryUI_checked = True
-            if onsuccess:
-                onsuccess()
-        def load_jqueryUI():
-            # Attach the global jquery
-            #pr("loading jquery")
-            self.js_init("""
-                console.log("assigning jquery");
-                window["jQuery"] = element.jQuery;
-                window["$"] = element.jQuery;
-            """)
-            self.load_css(style_fn)
+        # window.jQuery is automatically defined if absent.
+        if force or not self._jqueryUI_checked:            
             self.load_js_files([code_fn])
-            #pr("sleeping to allow sync")
-            time.sleep(sleep_delay)
-            #pr("rechecking load")
-            self.js_init("""
-                console.log("rechecking jquery load");
-                if (element.dialog) {
-                    load_succeeded();
-                } else {
-                    load_failed();
-                }
-            """, load_failed=load_failed, load_succeeded=load_succeeded)
-            #pr ("finished with load_jqueryUI")
-        self.js_init("""
-            console.log("checking jquery load")
-            if (element.dialog)
-            {
-                load_succeeded();
-            } else {
-                load_jqueryUI();
-            }
-        """, load_succeeded=load_succeeded, load_jqueryUI=load_jqueryUI)
-        #pr("exitting checkjQuery")
+            self.load_css(style_fn)
+            # no need to load twice.
+            JSProxyWidget._jqueryUI_checked = True
+        if onsuccess:
+            onsuccess()
 
     _require_checked = False
     _needs_requirejs = False
@@ -559,6 +521,9 @@ class JSProxyWidget(widgets.DOMWidget):
         Load a CSS text content from a file accessible by Python.
         """
         text = js_context.get_text_from_file_name(filepath, local)
+        return self.load_css_text(filepath, text)
+
+    def load_css_text(self, filepath, text):
         cmd = self.load_css_command(filepath, text)
         self(cmd)
         #return js_context.display_css(self, text)
@@ -972,6 +937,8 @@ class ElementCallWrapper(object):
         element = self.element
         slot = element[self.slot_name]
         widget(slot(*mapped_args))
+        # Allow chaining (may not be consistent with javascript semantics)
+        return element
 
 
 class CommandMaker(object):
