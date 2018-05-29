@@ -4,21 +4,16 @@ This is an implementation of a generic "javascript proxy" Jupyter notebook widge
 The idea is that for many purposes this widget will make it easy to use javascript
 components without having to implement the "javascript view" side of the widget.
 
-For example to create a jqueryui dialog we don't need any javascript support
-because jqueryui is already loaded as part of Jupyter and the proxy widget
-supplies access to the needed methods from Python:
-
-     from jp_gene_viz import js_proxy
-     from IPython.display import display
-     js_proxy.load_javascript_support()
-     dialog = js_proxy.ProxyWidget()
-     command = dialog.get_element().html("Hello from jqueryui").dialog()
-     display(dialog)
-     dialog.send_command(command)
+This in-module documentation constitutes implementation/design notes
+which does not explain how to use the module from a user perspective.
+For end-user API documentation please see the example notebooks provided
+in the source repository.
 
 The strategy is to pass a sequence of encoded javascript "commands" as a JSON
 object to the generic widget proxy and have the proxy execute javascript actions
-in response to the commands.  Commands can be chained using "chaining".
+in response to the commands.  The implementation uses Python and Javascript
+introspection features to map Python expressions to similar Javascript expressions.
+Commands can be chained using "chaining".
 
 (object.method1(...).
     method2(...).
@@ -34,7 +29,7 @@ as javascript actions:
 
 WIDGET INTERFACE: widget.get_element()
 JSON ENCODING: ["element"]
-JAVASCRIPT ACTION: get the this.$el element for the widget.
+JAVASCRIPT ACTION: get the this.$$el element for the widget.
 JAVASCRIPT RESULT: this.$el
 PASSED TO PYTHON: This should never be the end of the chain!
 
@@ -124,6 +119,8 @@ from .hex_codec import hex_to_bytearray, bytearray_to_hex
 # get a reference to the IPython notebook object.
 ip = IPython.get_ipython()
 
+# Template for javascript embedding
+#   XXXX deprecate? This is historical at this time.
 JAVASCRIPT_EMBEDDING_TEMPLATE = u"""
 (function () {{
     {debugger_string}
@@ -158,7 +155,8 @@ JAVASCRIPT_EMBEDDING_TEMPLATE = u"""
     wait_for_libraries();
 }})();
 """
-
+# Template for HTML embedding
+# XXXX deprecate?  This is historical at this time.
 HTML_EMBEDDING_TEMPLATE = (u"""
 <div id="{div_id}"></div>
 <script>""" +
@@ -166,8 +164,8 @@ JAVASCRIPT_EMBEDDING_TEMPLATE + """
 </script>
 """)
 
-# For creating unique DOM identities for embedded objects
-IDENTITY_COUNTER = [int(time.time()) % 10000000]
+# For creating unique DOM identities
+IDENTITY_COUNTER = [int(time.time() * 100) % 10000000]
 
 # String constants for messaging
 INDICATOR = "indicator"
@@ -183,7 +181,7 @@ LOAD_CSS = "load_css"
 LOAD_JS = "load_js"
 LOAD_INDICATORS = [LOAD_CSS, LOAD_JS]
 
-# message egmentation size default
+# Message segmentation size default
 BIG_SEGMENT = 1000000
 
 @widgets.register
@@ -196,7 +194,7 @@ class JSProxyWidget(widgets.DOMWidget):
     _view_module_version = Unicode('^0.1.0').tag(sync=True)
     _model_module_version = Unicode('^0.1.0').tag(sync=True)
 
-    # traitlet port to use for sending commends to javascript
+    # traitlet port to use for sending commands to javascript
     #commands = traitlets.List([], sync=True)
 
     # Rendered flag sent by JS view after render is complete.
@@ -209,15 +207,9 @@ class JSProxyWidget(widgets.DOMWidget):
     # increment this after every flush to force a sync?
     _send_counter = traitlets.Integer(0, sync=True)
 
-    # traitlet port to receive results of commands from javascript
-    #results = traitlets.List([], sync=True)
-
-    # traitlet port to receive results of callbacks from javascript
-    #callback_results = traitlets.List([], sync=True)
-
     verbose = False
 
-    # set to automatically flush messages to javascript side without buffering
+    # Set to automatically flush messages to javascript side without buffering after render.
     auto_flush = True
 
     def __init__(self, *pargs, **kwargs):
@@ -369,6 +361,7 @@ class JSProxyWidget(widgets.DOMWidget):
         """
         Translate buffered commands to static HTML.
         """
+        # XXXX deprecate?
         assert type(await) is list
         await_string = json.dumps(await)
         if div_id is None:
@@ -391,13 +384,16 @@ class JSProxyWidget(widgets.DOMWidget):
         """
         Embed the buffered commands into the current notebook as static HTML.
         """
+        # XXXX deprecate?
         embedded_html = self.embedded_html(debugger, await=await)
         display(HTML(embedded_html))
 
     def embedded_javascript(self, debugger=False, await=[], div_id=None):
+        # XXXX deprecate?
         return self.embedded_html(debugger, await, template=JAVASCRIPT_EMBEDDING_TEMPLATE, div_id=div_id)
 
     def save_javascript(self, filename, debugger=False, await=[], div_id=None):
+        # XXXX deprecate?
         out = open(filename, "w")
         js = self.embedded_javascript(debugger, await, div_id=div_id)
         out.write(js)
@@ -426,7 +422,6 @@ class JSProxyWidget(widgets.DOMWidget):
         Proxy to save referent in the element namespace by name.
         The command to save the element is buffered and the return
         value is a reference to the element by name.
-        This must be followed by a flush() to execute the command.
         """
         elt = self.get_element()
         save_command = elt._set(name, reference)
