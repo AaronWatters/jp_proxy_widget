@@ -564,13 +564,15 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             //};
             // before done, mark the text as loading but not complete
             that.loaded_js_by_name[js_name] = [false, js_text];
-            // compile the text NOT wrapped in an anonymous function
+            // compile the text wrapped in an anonymous function
             var function_body = [
                 //"debugger;",
-                // "(function() {",
+                "(function() {",
                 'console.log("eval-loading ' + js_name + '");',
+                // undefine the define function locally, just in case!
+                'var define = undefined;',
                 js_text,
-                // "})();",
+                "})();",
                 //"all_done();"
             ].join("\n");
             //var js_text_fn = Function("all_done", function_body);
