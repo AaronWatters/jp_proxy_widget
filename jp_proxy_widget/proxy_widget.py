@@ -457,9 +457,14 @@ class JSProxyWidget(widgets.DOMWidget):
         """
         # For subsequent actions wait for require to have loaded before executing
         self._needs_requirejs = True
+        def load_failed():
+            raise ImportError("Failed to load require.js in javascript context.")
+        def require_ok():
+            pass  # do nothing
         # this is a sequence of message callbacks:
         if self._require_checked:
-            # just do it
+            # if require is loaded, just do it
+            self.element.alias_require(require_ok, load_failed)
             if action:
                 action()
             return
@@ -489,8 +494,6 @@ class JSProxyWidget(widgets.DOMWidget):
         def validate_require():
             # pr ("validating require load")
             self.element.alias_require(load_succeeded, load_failed)
-        def load_failed():
-            raise ImportError("Failed to load require.js in javascript context.")
         def load_succeeded():
             JSProxyWidget._require_checked = True
             #if action:
