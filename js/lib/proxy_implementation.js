@@ -26,8 +26,8 @@ var JSProxyModel = widgets.DOMWidgetModel.extend({
         _view_name : 'JSProxyView',
         _model_module : 'jp_proxy_widget',
         _view_module : 'jp_proxy_widget',
-        _model_module_version : '0.1.0',
-        _view_module_version : '0.1.0'
+        _model_module_version : '0.3.0',
+        _view_module_version : '0.3.0'
     })
 });
 
@@ -570,14 +570,14 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                 // "(function() {",
                 'console.log("eval-loading ' + js_name + '");',
                 // undefine the define function temporarily, just in case!
-                'jQuery.save_global_define = define;',
+                'if (typeof define != "undefined") { jQuery.save_global_define = define; }',
                 'try {',
-                '    if (define) { define = undefined; }',
+                '    if (typeof define != "undefined") { define = undefined; }',
                 js_text,
                 '    ;console.log("finished eval-loading ' + js_name + '");',
                 '} finally { ',
-                '    if ((jQuery.save_global_define) && (!define)) {',
-                        'define = jQuery.save_global_define; ',
+                '    if ((jQuery.save_global_define) && (typeof define == "undefined") ) {',
+                '        define = jQuery.save_global_define; ',
                 '    } }',
                 //"})();",
                 //"all_done();"
