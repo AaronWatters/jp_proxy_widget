@@ -1,3 +1,6 @@
+
+[![Binder](https://mybinder.org/badge.svg)](https://mybinder.org/v2/gh/AaronWatters/jp_proxy_widget/master)
+
 jp_proxy_widget
 ===============================
 
