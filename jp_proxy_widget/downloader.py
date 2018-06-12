@@ -8,7 +8,7 @@ from IPython.display import display
 from traitlets import Unicode, HasTraits
 import time
 
-js_file = "js/Filesaver.js"
+js_file = "js/FileSaver.js"
 
 def load_file_saver(to_proxy_widget, when_ready):
     if hasattr(to_proxy_widget, "saveAs_loaded"):
