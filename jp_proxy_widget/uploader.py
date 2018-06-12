@@ -8,9 +8,8 @@ from traitlets import Unicode, HasTraits
 
 js_files = ["js/simple_upload_button.js"]
 
-def _load_required_js(widget, verbose=False):
-    jp_proxy_widget.load_components(verbose=verbose)
-    widget.load_js_files(filenames=js_files, verbose=verbose)
+def _load_required_js(widget):
+    widget.load_js_files(filenames=js_files)
 
 def from_hex_iterator(hexcontent):
     # xxxx try to optimize...
@@ -44,9 +43,9 @@ class UnicodeUploader(HasTraits):
         self.content_callback = content_callback
         w = self.widget = jp_proxy_widget.JSProxyWidget()
         _load_required_js(w)
-        element = w.element()
+        element = w.element
         if html_title is not None:
-            w(element.html(html_title)._null())
+            element.html(html_title)
         level = 2
         options = self.upload_options()
         options["size_limit"] = size_limit
