@@ -2,6 +2,14 @@
 
 Update _version.py (set release version, remove 'dev').
 
+Also bump the version information in 
+
+```
+js/package.json
+js/lib/proxy_implementation.js
+jp_proxy_widget/proxy_widget.py
+```
+
 git add the _version.py file and git commit.
 
 `python setup.py sdist upload`
