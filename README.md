@@ -4,13 +4,31 @@
 jp_proxy_widget
 ===============================
 
-Generic Jupyter/IPython widget implementation that will support many types of javascript libraries and interactions.
+A generic and easy to use Jupyter/IPython widget implementation that supports
+many types of javascript libraries and interactions.
 
 Please see the
 [notebooks/Tutorial.ipynb](notebooks/Tutorial.ipynb) notebook
 for more information on how to use proxy widgets.
 The tutorial is best viewed as a running notebook launched
 by a Jupyter server.
+
+Built in components
+-------------------
+
+The proxy widget implementation is intended to provide a framework
+for building Jupyter widgets leveraging external components.
+A few generally useful built in components are automatically provided.
+
+- There is built in support for uploading and downloading files -- see
+[notebooks/Upload and download widgets](notebooks/Upload and download widgets).
+- The widget implementation provides built in support
+for loading and using `jQueryUI` components (see the Tutorial).
+- The widget implementation provides support for loading and
+using the `requests.js` module management system if needed.
+
+Other components that are not built in may be loaded using
+the widget interface as described in the Tutorial.
 
 Installation
 ------------
