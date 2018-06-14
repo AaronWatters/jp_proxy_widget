@@ -21,7 +21,7 @@ for building Jupyter widgets leveraging external components.
 A few generally useful built in components are automatically provided.
 
 - There is built in support for uploading and downloading files -- see
-[notebooks/Upload and download widgets](notebooks/Upload and download widgets).
+[notebooks/Upload and download widgets.ipynb](notebooks/Upload%20and%20download%20widgets.ipynb).
 - The widget implementation provides built in support
 for loading and using `jQueryUI` components (see the Tutorial).
 - The widget implementation provides support for loading and
