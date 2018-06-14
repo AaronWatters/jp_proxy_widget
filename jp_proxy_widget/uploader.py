@@ -3,6 +3,7 @@ Upload files to jupyter server location or to Python callback using jp_proxy.
 """
 
 import jp_proxy_widget
+from jp_proxy_widget import hex_codec
 from IPython.display import display
 from traitlets import Unicode, HasTraits
 
@@ -182,5 +183,7 @@ class BinaryUploader(UnicodeUploader):
 
     def combine_chunks(self, chunk_list):
         all_hex_content = "".join(chunk_list)
-        return b"".join(from_hex_iterator(all_hex_content))
+        #return b"".join(from_hex_iterator(all_hex_content))
+        ba = hex_codec.hex_to_bytearray(all_hex_content)
+        return bytes(ba)
 
