@@ -1,5 +1,14 @@
 - To release a new version of jp_proxy_widget on PyPI:
 
+For fun and safety first snapshot the current state of the working folder
+because some commands below may delete files you forgot you wanted
+to keep (it happens).
+
+```bash
+mkdir -p ~/snapshots/jp_proxy_widget
+cp -rf * ~/snapshots/jp_proxy_widget
+```
+
 Update _version.py (set release version, remove 'dev').
 
 Also bump the version information in 
