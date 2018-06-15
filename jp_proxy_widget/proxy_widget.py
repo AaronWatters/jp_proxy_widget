@@ -119,51 +119,6 @@ from .hex_codec import hex_to_bytearray, bytearray_to_hex
 # get a reference to the IPython notebook object.
 ip = IPython.get_ipython()
 
-# Template for javascript embedding
-#   XXXX deprecate? This is historical at this time.
-JAVASCRIPT_EMBEDDING_TEMPLATE = u"""
-(function () {{
-    {debugger_string}
-    var do_actions = function () {{
-        var element = $("#{div_id}");
-        // define special functions...
-        element.New = function(klass, args) {{
-            var obj = Object.create(klass.prototype);
-            return klass.apply(obj, args) || obj;
-        }};
-        element.Fix = function () {{
-            // do nothing (not implemented.)
-        }}
-        var f;  // named function variable for debugging.
-        {actions};
-    }};
-    var wait_for_libraries = function () {{
-        var names = {names};
-        for (var i=0; i<names.length; i++) {{
-            var library = undefined;
-            try {{
-                library = eval(names[i]);
-            }} catch (e) {{
-                // do nothing
-            }}
-            if ((typeof library) == "undefined") {{
-                return window.setTimeout(wait_for_libraries, 500);
-            }}
-        }}
-        return do_actions();
-    }};
-    wait_for_libraries();
-}})();
-"""
-# Template for HTML embedding
-# XXXX deprecate?  This is historical at this time.
-HTML_EMBEDDING_TEMPLATE = (u"""
-<div id="{div_id}"></div>
-<script>""" +
-JAVASCRIPT_EMBEDDING_TEMPLATE + """
-</script>
-""")
-
 # For creating unique DOM identities
 IDENTITY_COUNTER = [int(time.time() * 100) % 10000000]
 
@@ -356,47 +311,6 @@ class JSProxyWidget(widgets.DOMWidget):
     def unique_id(self, prefix="jupyter_proxy_widget_id_"):
         IDENTITY_COUNTER[0] += 1
         return prefix + str(IDENTITY_COUNTER[0])
-
-    def embedded_html(self, debugger=False, await=[], template=HTML_EMBEDDING_TEMPLATE, div_id=None):
-        """
-        Translate buffered commands to static HTML.
-        """
-        # XXXX deprecate?
-        assert type(await) is list
-        await_string = json.dumps(await)
-        if div_id is None:
-            div_id = self.unique_id()
-        ##pr("id", div_id)
-        debugger_string = "// Initialize static widget display with no debugging."
-        if debugger:
-            debugger_string = "// Debug mode for static widget display\ndebugger;"
-        commands = self.buffered_commands
-        js_commands = [to_javascript(c) for c in commands]
-        command_string = indent_string(";\n".join(js_commands), 2)
-        #return HTML_EMBEDDING_TEMPLATE % (div_id, debugger_string, div_id, command_string)
-        return template.format(
-            div_id=div_id,
-            debugger_string=debugger_string,
-            actions=command_string,
-            names=await_string)
-
-    def embed(self, debugger=False, await=[]):
-        """
-        Embed the buffered commands into the current notebook as static HTML.
-        """
-        # XXXX deprecate?
-        embedded_html = self.embedded_html(debugger, await=await)
-        display(HTML(embedded_html))
-
-    def embedded_javascript(self, debugger=False, await=[], div_id=None):
-        # XXXX deprecate?
-        return self.embedded_html(debugger, await, template=JAVASCRIPT_EMBEDDING_TEMPLATE, div_id=div_id)
-
-    def save_javascript(self, filename, debugger=False, await=[], div_id=None):
-        # XXXX deprecate?
-        out = open(filename, "w")
-        js = self.embedded_javascript(debugger, await, div_id=div_id)
-        out.write(js)
 
     def __call__(self, command):
         "Add a command to the buffered commands. Convenience."
