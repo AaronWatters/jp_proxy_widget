@@ -56,7 +56,6 @@ class UnicodeUploader(HasTraits):
         #element = w.element()
         #upload_button = element.simple_upload_button(proxy_callback, options)
         w.js_init("""
-            debugger;
             var upload_callback = function(data) {
                 var content = data.content;
                 if (!($.type(content) === "string")) {

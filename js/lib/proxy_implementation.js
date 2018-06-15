@@ -42,7 +42,6 @@ var JSProxyLoad = "JSProxyLoad";
 var JSProxyView = widgets.DOMWidgetView.extend({
 
     render: function() {
-        debugger;
 
         var that = this;
         this.el.textContent = "Uninitialized Proxy Widget";
@@ -222,6 +221,25 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         //that.$$el.Fix = function(element) {
         //    that.model.widget_manager.keyboard_manager.register_events(element);
         //};
+
+        that.$$el.no_overflow = function() {
+            // prevent overflow scrollbars on the widget (and parents)
+            var div = that.$$el[0];
+            for (var count=0; count<10; count++) {
+                if (div.style) {
+                    div.style.overflowX = "visible";
+                    div.style.overflow = "visible";
+                    div.style.height = "auto";
+                }
+                div = div.parentNode;
+                if (!div) {
+                    break;
+                }
+            }
+        };
+
+        // Just do it -- we never want scrollbars on widgets.
+        that.$$el.no_overflow();
 
         that.model.set("rendered", true);
         that.touch();
@@ -566,7 +584,6 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             that.loaded_js_by_name[js_name] = [false, js_text];
             // compile the text NOT wrapped in an anonymous function
             var function_body = [
-                //"debugger;",
                 // "(function() {",
                 'console.log("eval-loading ' + js_name + '");',
                 // undefine the define function temporarily, just in case!

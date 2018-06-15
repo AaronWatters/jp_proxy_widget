@@ -40,7 +40,6 @@ more information on the error, such as "file too big."
 
 (function($) {
     $.fn.simple_upload_button = function (callback, options) {
-        debugger;
         var settings = $.extend({
             "size_limit": 10000000,
             "style": {"display": "inline-block"},
@@ -60,7 +59,6 @@ more information on the error, such as "file too big."
         var chunk_size = settings.chunk_size;
         var continuation_style = settings.continuation_style;
         var to_hex_string = function (buffer) {
-            //debugger;
             var bytes = new Uint8Array(buffer);
             return Array.from(bytes).map(hex_byte).join("");
         };
