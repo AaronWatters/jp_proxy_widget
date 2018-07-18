@@ -1,6 +1,6 @@
 """
-Utility for ensuring that each javascript file is loaded exactly once for a Jupyter
-python interpreter.
+Utilities for loading CSS and Javascript text either from files or via HTTP.
+
 """
 
 from __future__ import print_function
@@ -14,6 +14,7 @@ import requests
 my_dir = os.path.dirname(__file__)
 
 LOADED_JAVASCRIPT = set()
+LOADED_FILES = set()
 
 def get_file_path(filename, local=True, relative_to_module=None, my_dir=my_dir):
     """
@@ -41,6 +42,7 @@ def get_text_from_file_name(filename, local=True):
         return r.text
     else:
         path = get_file_path(filename, local)
+        LOADED_FILES.add(path)
         return open(path).read()
 
 def display_javascript(widget, js_text):
