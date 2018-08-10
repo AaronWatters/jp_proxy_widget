@@ -197,10 +197,19 @@ class JSProxyWidget(widgets.DOMWidget):
         #pr ("js_init")
         #pr(js_function_body)
         other_argument_names = list(other_arguments.keys())
+        def listiffy(v):
+            "convert tuples and elements of tuples to lists"
+            type_v = type(v)
+            if type_v in [tuple, list]:
+                return list(listiffy(x) for x in v)
+            elif type_v is dict:
+                return dict((a, listiffy(b)) for (a,b) in v.items())
+            else:
+                return v
         def map_value(v):
             if callable(v):
                 return self.callable(v, level=callable_level)
-            return v
+            return listiffy(v)
         other_argument_values = [map_value(other_arguments[name]) for name in other_argument_names]
         argument_names = list(["element"] + other_argument_names)
         argument_values = list([self.get_element()] + other_argument_values)
@@ -558,6 +567,7 @@ class JSProxyWidget(widgets.DOMWidget):
             return ("awaiting render", commands)
 
     def send_segmented_message(self, frag_ind, final_ind, payload, segmented):
+        "Send a message in fragments."
         json_str = json.dumps(payload)
         len_json = len(json_str)
         cursor = 0
@@ -851,6 +861,10 @@ class ElementCallWrapper(object):
         widget(slot(*mapped_args))
         # Allow chaining (may not be consistent with javascript semantics)
         return element
+
+    def __getattr__(self, name):
+        for_element = self.element[self.slot_name]
+        return ElementCallWrapper(self.widget, for_element, name)
 
 
 class CommandMaker(object):
