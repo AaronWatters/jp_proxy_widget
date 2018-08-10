@@ -31,10 +31,6 @@ var JSProxyModel = widgets.DOMWidgetModel.extend({
     })
 });
 
-// Define a require.js module to help with loading external modules
-// from source code
-var module_name_to_text = {};
-
 //var loader_defined = false;
 var JSProxyLoad = "JSProxyLoad";
 
