@@ -866,6 +866,9 @@ class ElementCallWrapper(object):
         for_element = self.element[self.slot_name]
         return ElementCallWrapper(self.widget, for_element, name)
 
+    # getattr and getitem are the same in Javascript
+    __getitem__ = __getattr__
+
 
 class CommandMaker(object):
 
