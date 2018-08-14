@@ -50,7 +50,7 @@ For a development installation (requires npm),
 
 For jupyterlab also do
 
-    $ jupyter labextension install js
+    $ jupyter labextension install jp_proxy_widget
 
 The following must have been run once at sometime in the past:
 
