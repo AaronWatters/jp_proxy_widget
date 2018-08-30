@@ -41,7 +41,7 @@ more information on the error, such as "file too big."
 (function($) {
     $.fn.simple_upload_button = function (callback, options) {
         var settings = $.extend({
-            "size_limit": 10000000,
+            "size_limit": 10000000,  // Don't upload files larger than this.
             "style": {"display": "inline-block"},
             "hexidecimal": true,
             "chunk_size": 0,  // default to all at once

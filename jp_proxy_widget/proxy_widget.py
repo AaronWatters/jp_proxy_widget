@@ -189,6 +189,24 @@ class JSProxyWidget(widgets.DOMWidget):
         self.results = []
         self.status = "Not yet rendered"
 
+    def set_element(self, slot_name, value):
+        """
+        Map value to javascript and attach it as element[slot_name].
+        """
+        self.js_init("element[slot_name] = value;", slot_name=slot_name, value=value)
+
+    def get_value_async(self, callback, javascript_expression, debug=False):
+        """
+        Evaluate the Javascript expression and send the result value to the callback as callback(value) asynchronously.
+        """
+        codeList = []
+        codeList.append("// get_value_async")
+        if debug:
+            codeList.append("debugger;")
+        codeList.append("callback(" + javascript_expression + ");")
+        code = "\n".join(codeList)
+        self.js_init(code, callback=callback)
+
     def js_init(self, js_function_body, callable_level=3, **other_arguments):
         """
         Run special purpose javascript initialization code.
