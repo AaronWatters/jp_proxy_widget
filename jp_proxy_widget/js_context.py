@@ -36,14 +36,20 @@ def get_file_path(filename, local=True, relative_to_module=None, my_dir=my_dir):
     assert os.path.exists(result), "no such file " + repr((filename, result, user_path))
     return result
 
+if bytes != str:
+    unicode = str  # Python 3
+
 def get_text_from_file_name(filename, local=True):
     if filename.startswith("http") and "://" in filename:
         r = requests.get(filename)
-        return r.text
+        result = r.text
     else:
         path = get_file_path(filename, local)
         LOADED_FILES.add(path)
-        return open(path).read()
+        result = open(path).read()
+    if type(result) == bytes:
+        result = unicode(result, "utf8")
+    return result
 
 def display_javascript(widget, js_text):
     # This will not work if javascript is disabled.
