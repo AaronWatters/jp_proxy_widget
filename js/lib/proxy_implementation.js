@@ -26,8 +26,8 @@ var JSProxyModel = widgets.DOMWidgetModel.extend({
         _view_name : 'JSProxyView',
         _model_module : 'jp_proxy_widget',
         _view_module : 'jp_proxy_widget',
-        _model_module_version : '0.3.4',
-        _view_module_version : '0.3.4',
+        _model_module_version : '1.0.0',
+        _view_module_version : '1.0.0',
     })
 });
 
