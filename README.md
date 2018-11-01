@@ -32,6 +32,14 @@ using the `requests.js` module management system if needed.
 Other components that are not built in may be loaded using
 the widget interface as described in the Tutorial.
 
+Other examples
+--------------
+
+Other examples of `jp_proxy_widget` uses can be found in other repositories.
+For example
+[The `jp_doodle` repository](https://github.com/AaronWatters/jp_doodle) provideds
+numerous examples of interactive components built using the proxy widget infrastructure.
+
 Installation
 ------------
 
