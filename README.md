@@ -7,6 +7,8 @@ jp_proxy_widget
 A generic and easy to use Jupyter/IPython widget implementation that supports
 many types of javascript libraries and interactions.
 
+<img src="proxy_hello.png" width="300">
+
 Please see the
 [notebooks/Tutorial.ipynb](notebooks/Tutorial.ipynb) notebook
 for more information on how to use proxy widgets.
