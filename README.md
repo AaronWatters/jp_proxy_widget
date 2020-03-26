@@ -46,10 +46,12 @@ Installation
 To install use pip:
 
     $ pip install jp_proxy_widget
+    $ jupyter nbextension install --py --symlink --sys-prefix jp_proxy_widget
     $ jupyter nbextension enable --py --sys-prefix jp_proxy_widget
 
-To run with JupyterLab
+To run with Jupyter Lab
 
+    $ jupyter labextension install @jupyter-widgets/jupyterlab-manager
     $ jupyter labextension install @jupyter-widgets/jupyterlab-manager jp_proxy_widget
 
 For a development installation (requires npm),
