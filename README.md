@@ -48,6 +48,9 @@ To install use pip:
     $ pip install jp_proxy_widget
     $ jupyter nbextension enable --py --sys-prefix jp_proxy_widget
 
+To run with JupyterLab
+
+    $ jupyter labextension install @jupyter-widgets/jupyterlab-manager jp_proxy_widget
 
 For a development installation (requires npm),
 
@@ -57,10 +60,9 @@ For a development installation (requires npm),
     $ jupyter nbextension install --py --symlink --sys-prefix jp_proxy_widget
     $ jupyter nbextension enable --py --sys-prefix jp_proxy_widget
 
-
 For jupyterlab also do
 
-    $ jupyter labextension install jp_proxy_widget
+    $ jupyter labextension install @jupyter-widgets/jupyterlab-manager .
 
 The following must have been run once at sometime in the past:
 
