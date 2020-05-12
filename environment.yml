@@ -1,0 +1,9 @@
+name: jp_proxy_widget
+channels:
+  - conda-forge
+dependencies:
+  - jupyterlab>=2.1.2
+  - widgetsnbextension
+  - pip
+  - pip:
+    - jp_proxy_widget
