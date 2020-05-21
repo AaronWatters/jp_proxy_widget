@@ -29,7 +29,7 @@ v10.13.0
 Before running the tests you must install the dependencies:
 
 ```
-$ cd <root>/jupyter_puppeteer_helpers
+$ cd <root>/jp_proxy_widget/end_to_end_tests
 $ npm install
 ```
 
