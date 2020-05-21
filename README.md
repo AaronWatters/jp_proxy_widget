@@ -1,5 +1,8 @@
 
 [![Binder](https://mybinder.org/badge.svg)](https://mybinder.org/v2/gh/AaronWatters/jp_proxy_widget/master)
+[![Build Status](https://travis-ci.org/AaronWatters/jp_proxy_widget.svg?branch=master)](https://travis-ci.org/AaronWatters/jp_proxy_widget)
+
+
 
 jp_proxy_widget
 ===============================
