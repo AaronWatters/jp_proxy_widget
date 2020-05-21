@@ -1,38 +1,18 @@
 {
-  "name": "jupyter_puppeteer_helpers",
+  "name": "jp_proxy_widgets_end_to_end_testing",
   "version": "1.0.0",
-  "description": "Some helpful code for controlling Jupyter from puppeteer using a headless browser.",
-  "main": "src/jp_helpers.js",
-  "files": [
-    "src/jp_helpers.js"
-  ],
-  "dependencies": {
-    "puppeteer": "^3.0.2"
-  },
+  "description": "THIS MODULE IS ONLY FOR INTERNAL TESTING -- DO NOT PUBLISH.",
+  "files": [],
+  "dependencies": {},
   "devDependencies": {
     "jest": "^22.4.3",
     "jest-dev-server": "^4.4.0",
     "jest-environment-node": "^22.0.0",
     "jest-puppeteer": "^4.4.0",
+    "jupyter_puppeteer_helpers": "git+https://git@github.com/AaronWatters/jupyter_puppeteer_helpers.git",
     "puppeteer": "^3.0.2"
   },
   "scripts": {
     "test": "jest"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/AaronWatters/jupyter_puppeteer_helpers.git"
-  },
-  "keywords": [
-    "jest",
-    "testing",
-    "puppeteer",
-    "jupyter"
-  ],
-  "author": "Aaron Watters",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/AaronWatters/jupyter_puppeteer_helpers/issues"
-  },
-  "homepage": "https://github.com/AaronWatters/jupyter_puppeteer_helpers#readme"
+  }
 }

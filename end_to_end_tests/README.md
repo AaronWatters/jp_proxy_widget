@@ -1,15 +1,58 @@
-# jupyter_puppeteer_helpers
+# End-to-end tests for `jp_proxy_widgets`
 
-[![Build Status](https://travis-ci.org/AaronWatters/jupyter_puppeteer_helpers.svg?branch=master)](https://travis-ci.org/AaronWatters/jupyter_puppeteer_helpers)
+The following is an outline of the steps to create these tests:
 
-Some helpful code for controlling Jupyter from puppeteer using a headless browser.
+```
+$ cp -r ~/tmp/jupyter_puppeteer_helpers/* .
+$ git add *
+$ git commit -m "copy test framework from jupyter_puppeteer_helpers"
+$ git rm src/jp_helpers.js 
+$ git commit -m "don't include the source module -- add it to dev dependencies instead"
+```
+Then edit package.json to change the package name and description and remove stuff.
+```
+$ npm install
+$ npm install git+https://git@github.com/AaronWatters/jupyter_puppeteer_helpers.git --save-dev
+```
 
-Although the code does not depend on `jest` and `jest-puppeteer` this repository
-was primarily built to provide common tools for creating end-to-end tests for Jupyter
-widget implementations using `jest` with `puppeteer` as a testing engine.
+Edit import in `jest/globalSetup.js`.
 
-The module may also be helpful for automatically capturing (very many) images from notebook based visualizations
-in an automated manner, among other use cases.
+```
+$ git diff jest/globalSetup.js 
+diff --git a/end_to_end_tests/jest/globalSetup.js b/end_to_end_tests/jest/globalSetup.js
+index 7917162..90a9a70 100644
+--- a/end_to_end_tests/jest/globalSetup.js
++++ b/end_to_end_tests/jest/globalSetup.js
+@@ -1,6 +1,6 @@
+ const { setup: setupDevServer } = require('jest-dev-server')
+ const { setup: setupPuppeteer } = require('jest-environment-puppeteer')
+-const { RUN_JUPYTER_SERVER_CMD } = require("../src/jp_helpers");
++const { RUN_JUPYTER_SERVER_CMD } = require("jupyter_puppeteer_helpers");
+```
+
+Similarly edit `tests/headless.test.js`
+
+```
+$ git diff tests/headless.test.js 
+diff --git a/end_to_end_tests/tests/headless.test.js b/end_to_end_tests/tests/headless.test.js
+index 810ee42..51b6c77 100644
+--- a/end_to_end_tests/tests/headless.test.js
++++ b/end_to_end_tests/tests/headless.test.js
+@@ -2,7 +2,7 @@
+ // These end-to-end tests use puppeteer and headless chrome using the default jest-environment configuration.
+ 
+ const fs = require("fs");
+-const { JupyterContext, sleep, JUPYTER_URL_PATH } = require("../src/jp_helpers");
++const { JupyterContext, sleep, JUPYTER_URL_PATH } = require("jupyter_puppeteer_helpers");
+ 
+ const verbose = true;
+ //const JUPYTER_URL_PATH = "./_jupyter_url.txt";
+```
+
+Then run the basic tests
+```
+$ npm test
+```
 
 # Running the tests
 

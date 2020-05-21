@@ -1,6 +1,6 @@
 const { setup: setupDevServer } = require('jest-dev-server')
 const { setup: setupPuppeteer } = require('jest-environment-puppeteer')
-const { RUN_JUPYTER_SERVER_CMD } = require("../src/jp_helpers");
+const { RUN_JUPYTER_SERVER_CMD } = require("jupyter_puppeteer_helpers");
 
 module.exports = async function globalSetup(globalConfig) {
 

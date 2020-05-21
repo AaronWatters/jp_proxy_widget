@@ -2,7 +2,7 @@
 // These end-to-end tests use puppeteer and headless chrome using the default jest-environment configuration.
 
 const fs = require("fs");
-const { JupyterContext, sleep, JUPYTER_URL_PATH } = require("../src/jp_helpers");
+const { JupyterContext, sleep, JUPYTER_URL_PATH } = require("jupyter_puppeteer_helpers");
 
 const verbose = true;
 //const JUPYTER_URL_PATH = "./_jupyter_url.txt";
