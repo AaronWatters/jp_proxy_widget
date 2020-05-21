@@ -54,6 +54,8 @@ Then run the basic tests
 $ npm test
 ```
 
+Then modify contents of `notebook_test` and `tests` to add local tests and examples.
+
 # Running the tests
 
 The `npm` tests for the module are end-to-end tests which do not attempt

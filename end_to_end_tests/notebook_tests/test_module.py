@@ -4,6 +4,7 @@
 #import widget_cookie_cutter_test
 from IPython.display import display
 import ipywidgets as widgets
+import jp_proxy_widget
 
 secret_label = "SECRET BUTTON LABEL"
 
@@ -20,9 +21,12 @@ def get_a_button():
 test_string = "THIS IS THE SECRET TEST STRING"
 
 def get_a_widget():
-    result = widget_cookie_cutter_test.example.HelloWorld()
-    result.value = test_string
-    display(result)
+    greeter = jp_proxy_widget.JSProxyWidget()
+    greeter.element.html("<h2>%s</h2>" % test_string)
+    greeter.element.css("color", "magenta")
+    greeter.element.css("background-color", "blue")
+    greeter.element.width(200)
+    display(greeter)
 
 # Put these at the bottom of the module so they don't show up in import error tracebacks in the notebook
 secret_label = "SECRET BUTTON LABEL"
