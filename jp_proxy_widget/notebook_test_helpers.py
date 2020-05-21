@@ -4,9 +4,11 @@ import time
 
 class ValidationSuite:
 
-    def __init__(self):
+    def __init__(self, success="Tests completed with no exception.", failure="TESTS FAILED"):
         self.widget_validator_list = []
         self.widget_to_validator = {}
+        self.success = success
+        self.failure = failure
 
     def add_validation(self, widget, validation):
         self.widget_validator_list.append((widget, validation))
@@ -28,12 +30,22 @@ class ValidationSuite:
         print("sleeping in kernel interface...")
         time.sleep(delay_ms / 1000.0)
         print("initializing validator widget.")
+        validator_widget = jp_proxy_widget.JSProxyWidget()
 
         def validate_all():
-            for (widget, validator) in self.widget_validator_list:
-                validator()
+            try:
+                for (widget, validator) in self.widget_validator_list:
+                    validator()
+            except:
+                validator_widget.js_init("""
+                    $("<div>" + failure + "</div>").appendTo(element);
+                """, failure=self.failure)
+                raise
+            else:
+                validator_widget.js_init("""
+                    $("<div>" + success + "</div>").appendTo(element);
+                """, success=self.success)
 
-        validator_widget = jp_proxy_widget.JSProxyWidget()
         validator_widget.js_init("""
         element.html("<em>Delaying validators to allow environment to stabilize</em>");
 

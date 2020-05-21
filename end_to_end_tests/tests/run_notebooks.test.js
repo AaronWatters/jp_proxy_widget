@@ -37,6 +37,8 @@ describe("test suites in notebooks" , async () => {
         await sleep(200);
         console.log("Verify that test_string appears in widget output")
         //await nb_context.wait_until_there(nb_context.selectors.container, test_string);
+        //console.log("sleeping 20 seconds... ")
+        //await sleep(20000);
         await nb_context.wait_for_contained_text(test_string);
         console.log("now shutting down notebook and kernel");
         var result = await nb_context.shut_down_notebook();
@@ -49,6 +51,24 @@ describe("test suites in notebooks" , async () => {
         const path = "notebook_tests/basic_tests.ipynb";
         const test_string = "Tests completed with no exception.";
         const initial_string = "Basic functionality tests";
+        return await run_notebook(path, test_string, initial_string);
+    },
+    120000, // timeout in 2 minutes...
+    );
+
+    it("runs jqueryui in a notebook",  async () => {
+        const path = "notebook_tests/jqueryui_tests.ipynb";
+        const test_string = "Tests completed with no exception.";
+        const initial_string = "These tests verify that JQueryUI loads with CSS styling when requested.";
+        return await run_notebook(path, test_string, initial_string);
+    },
+    120000, // timeout in 2 minutes...
+    );
+
+    it("loads stuff using require in a notebook",  async () => {
+        const path = "notebook_tests/require_test.ipynb";
+        const test_string = "Tests completed with no exception.";
+        const initial_string = "requireJS -- load a define/require style javascript module";
         return await run_notebook(path, test_string, initial_string);
     },
     120000, // timeout in 2 minutes...
