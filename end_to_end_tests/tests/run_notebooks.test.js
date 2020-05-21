@@ -18,16 +18,12 @@ describe("test suites in notebooks" , async () => {
     it("reports the browser version",  async () => {
         var version = await browser.version();
         console.log("browser version: " + version);
-        expect(version).toBeNull();
+        expect(version).toBeTruthy();
     },
     120000, // timeout in 2 minutes...
     );
 
-
-    it("runs basic proxy widget tests in a notebook",  async () => {
-        const path = "notebook_tests/basic_tests.ipynb";
-        const test_string = "Tests completed with no exception.";
-        const initial_string = "Basic functionality tests";
+    async function run_notebook(path, test_string, initial_string) {
         var nb_context = await context.classic_notebook_context(path);
         console.log("wait for the page to initialize... looking for " + initial_string);
         await nb_context.wait_for_contained_text(initial_string);
@@ -46,6 +42,14 @@ describe("test suites in notebooks" , async () => {
         var result = await nb_context.shut_down_notebook();
         // success!
         expect(result).toBeTruthy();
+        return result;
+    }
+
+    it("runs basic proxy widget tests in a notebook",  async () => {
+        const path = "notebook_tests/basic_tests.ipynb";
+        const test_string = "Tests completed with no exception.";
+        const initial_string = "Basic functionality tests";
+        return await run_notebook(path, test_string, initial_string);
     },
     120000, // timeout in 2 minutes...
     );

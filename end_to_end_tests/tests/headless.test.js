@@ -114,7 +114,7 @@ describe("headless browser tests", async () => {
     120000, // timeout in 2 minutes...
     );
 
-    it("runs a widget in an example notebook in lab",  async () => {
+    it("runs in lab a widget in an example notebook",  async () => {
         const path = "notebook_tests/example.ipynb";
         const test_string = "THIS IS THE SECRET TEST STRING";
         const secret_label = "SECRET BUTTON LABEL";
