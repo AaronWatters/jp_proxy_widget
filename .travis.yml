@@ -1,0 +1,30 @@
+language: node
+node_js:
+- '10'
+branches:
+  only:
+  - master
+before_install:
+# install python and jupyter, etc, using miniconda
+- wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+- bash miniconda.sh -b -p $HOME/miniconda
+- export PATH="$HOME/miniconda/bin:$PATH"
+- hash -r
+- conda config --set always_yes yes --set changeps1 no
+- conda update -q conda
+# Useful for debugging any issues with conda
+- conda info -a
+- deps='pip coverage nose'
+- conda create -q -n test-environment $deps
+- source activate test-environment
+- npm update
+- conda install -c conda-forge jupyterlab=2.1.2
+- conda install -c conda-forge ipywidgets
+- jupyter labextension install @jupyter-widgets/jupyterlab-manager
+- pip install git+https://github.com/aaronwatters/jp_proxy_widget
+- jupyter labextension install ./js
+- cd end_to_end_testing
+install:
+- npm install
+script:
+- npm test
