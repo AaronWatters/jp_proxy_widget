@@ -55,7 +55,7 @@ To install use pip:
 To run with Jupyter Lab
 
     $ jupyter labextension install @jupyter-widgets/jupyterlab-manager
-    $ jupyter labextension install @jupyter-widgets/jupyterlab-manager jp_proxy_widget
+    $ jupyter labextension install jp_proxy_widget
 
 For a development installation (requires npm),
 
@@ -68,7 +68,4 @@ For a development installation (requires npm),
 For jupyterlab also do
 
     $ jupyter labextension install @jupyter-widgets/jupyterlab-manager .
-
-The following must have been run once at sometime in the past:
-
-    $ jupyter labextension install @jupyter-widgets/jupyterlab-manager
+    $ jupyter labextension install ./js

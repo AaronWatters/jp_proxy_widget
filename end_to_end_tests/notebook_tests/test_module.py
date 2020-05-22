@@ -6,8 +6,6 @@ from IPython.display import display
 import ipywidgets as widgets
 import jp_proxy_widget
 
-secret_label = "SECRET BUTTON LABEL"
-
 def get_a_button():
     b = widgets.Button(
         description=secret_label,
@@ -17,8 +15,6 @@ def get_a_button():
         icon='check'
     )
     display(b)
-
-test_string = "THIS IS THE SECRET TEST STRING"
 
 def get_a_widget():
     greeter = jp_proxy_widget.JSProxyWidget()
