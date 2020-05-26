@@ -74,4 +74,13 @@ describe("test suites in notebooks" , async () => {
     120000, // timeout in 2 minutes...
     );
 
+    it("does chaining and other Python/JS syntax mapping correctly",  async () => {
+        const path = "notebook_tests/construct_mapping_tests.ipynb";
+        const test_string = "Tests completed with no exception.";
+        const initial_string = "Python to Javascript construct mapping tests";
+        return await run_notebook(path, test_string, initial_string);
+    },
+    120000, // timeout in 2 minutes...
+    );
+
 });
