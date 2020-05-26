@@ -27,10 +27,16 @@ class TestJsContext(unittest.TestCase):
         abspath = os.path.abspath(name)
         assert abspath.endswith("jp_proxy_widget/js/simple.js")
 
+    #@patch("jp_proxy_widget.js_context.requests.get")  # dunno why I had to comment this...
     def test_remote_content(
         self, 
         path="https://raw.githubusercontent.com/AaronWatters/jp_proxy_widget/master/README.md"):
+        class response:
+            text = "talks about jp_doodle and other things"
+        save = js_context.requests.get
+        js_context.requests.get = MagicMock(return_value=response)
         content = js_context.get_text_from_file_name(path)
+        js_context.requests.get = save
         assert "jp_doodle" in content
 
     def test_local_content(self, path="js/simple.js"):

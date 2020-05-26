@@ -6,7 +6,7 @@ import jp_proxy_widget
 import tempfile
 import os
 
-class TestJsContext(unittest.TestCase):
+class TestProxyWidget(unittest.TestCase):
 
     def test_path(self):
         # smoke test
@@ -442,21 +442,38 @@ class TestJsContext(unittest.TestCase):
 
     def test_seg_callback(self, *args):
         widget = proxy_widget.JSProxyWidget()
-        def f():
-            return None
+        def f(*args):
+            return args
         data = (1,2,3)
         widget.seg_callback(f, data)
 
     def test_callable(self, *args):
         widget = proxy_widget.JSProxyWidget()
-        def f():
-            return None
+        def f(*args):
+            #print("got args: " + repr(args))
+            return args
         c = widget.callable(f)
         c2 = widget.callable(c)
-        print (c)
-        print (c2)
         assert c is c2
         assert type(c) is jp_proxy_widget.CallMaker
+        # call the callback
+        identifier = c.args[0]
+        callback = widget.identifier_to_callback[identifier]
+        callback("dummy", {"0": "the first argument"})
+        #self.assertEqual(c.args[1], 1)
+        #(count, data, level, segmented) = c.args
+
+    def test_forget_callable(self, *args):
+        widget = proxy_widget.JSProxyWidget()
+        widget.identifier_to_callback = {1: list, 2: dict}
+        widget.forget_callback(list)
+        self.assertEqual(list(widget.identifier_to_callback.keys()), [2])
+
+    def test_js_debug(self, *args):
+        widget = proxy_widget.JSProxyWidget()
+        widget.get_element = MagicMock()
+        widget.send_command = MagicMock()
+        widget.js_debug()
 
 class RequireMockElement:
     "Used for mocking the element when testing loading requirejs"
