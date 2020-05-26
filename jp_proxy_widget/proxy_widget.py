@@ -136,6 +136,9 @@ LOAD_CSS = "load_css"
 LOAD_JS = "load_js"
 LOAD_INDICATORS = [LOAD_CSS, LOAD_JS]
 
+# This slot name is used to support D3-style chaining under some circumstances
+FRAGILE_JS_REFERENCE = "_FRAGILE_JS_REFERENCE"
+
 # Message segmentation size default
 BIG_SEGMENT = 1000000
 
@@ -188,6 +191,23 @@ class JSProxyWidget(widgets.DOMWidget):
         self.last_callback_results = None
         self.results = []
         self.status = "Not yet rendered"
+        # Used for D3 style "chaining" -- reference to last object reference cached on JS side
+        self.last_fragile_reference = None
+        #self.executing_fragile = False
+
+    def execute_and_return_fragile_reference(self, for_action):
+        "This is a trick to support D3-style chaining of Python expressions that map to Javascript."
+        #if self.executing_fragile:
+        #    raise ValueError("recursing in fragile execution")
+        self.executing_fragile = True
+        #("execute_and_return_fragile_reference(")
+        # execute the action and cache the result temporarily
+        self.element._set(FRAGILE_JS_REFERENCE, for_action)
+        # DON'T execute it twice
+        #self(cached)
+        reference = self.element[FRAGILE_JS_REFERENCE]
+        #self.executing_fragile = False
+        return FragileReference(self, reference, for_action)
 
     def set_element(self, slot_name, value):
         """
@@ -553,15 +573,18 @@ class JSProxyWidget(widgets.DOMWidget):
         "Send a single command to the JS View."
         return self.send_commands([command], results_callback, level)
 
-    def send_commands(self, commands_iter, results_callback=None, level=1, segmented=None):
+    def send_commands(self, commands_iter, results_callback=None, level=1, segmented=None, check=False):
         """Send several commands fo the JS View.
         If segmented is a positive integer then the commands payload will be pre-encoded
         as a json string and sent in segments of that length
         """
         count = self.counter
         self.counter = count + 1
+        commands_iter = list(commands_iter)
         qcommands = list(map(quoteIfNeeded, commands_iter))
         commands = validate_commands(qcommands)
+        if check:
+            debug_check_commands(commands)
         if self.rendered:
             # also send any commands awaiting the render event.
             if self.commands_awaiting_render:
@@ -872,21 +895,69 @@ class ElementCallWrapper(object):
         return v
 
     def __call__(self, *args):
+        # ("elementcallwrapper.__call__")
         mapped_args = map(self.map_value, args)
         widget = self.widget
         element = self.element
         slot = element[self.slot_name]
-        widget(slot(*mapped_args))
-        # Allow chaining (may not be consistent with javascript semantics)
-        return element
+        #widget(slot(*mapped_args))
+        call = slot(*mapped_args)
+        return widget.execute_and_return_fragile_reference(call)
 
     def __getattr__(self, name):
+        widget = self.widget
         for_element = self.element[self.slot_name]
-        return ElementCallWrapper(self.widget, for_element, name)
+        #get = ElementCallWrapper(self.widget, for_element, name)
+        get = for_element[name]
+        return widget.execute_and_return_fragile_reference(get)
 
     # getattr and getitem are the same in Javascript
     __getitem__ = __getattr__
 
+class StaleFragileJavascriptReference(ValueError):
+    "Stale Javascript value reference"
+
+class FragileReference(object):
+
+    def __init__(self, for_widget, referee, cached):
+        self.widget = for_widget
+        self.referee = referee
+        self.cached = cached
+        self.widget.last_fragile_reference = self
+
+    def __repr__(self):
+        return "FragileReference(%s)" % id(self.referee)
+
+    def get_protected_content(self):
+        this.error_if_fragile_reference_is_stale()
+        return self.referee
+
+    def error_if_fragile_reference_is_stale(self):
+        #("checking fragile reference\n", repr(self.cached))
+        if self.widget.last_fragile_reference is not self:
+            raise StaleFragileJavascriptReference(
+                    "Value references should only be used in 'chained' expressions."
+                    + "  " + repr(self.cached)
+                )
+
+    def __call__(self, *args):
+        #("fragilereference.__call__", args)
+        self.error_if_fragile_reference_is_stale()
+        return self.referee(*args)
+
+    def __getattr__(self, name):
+        #("fragilereference.__getattr__", name)
+        if name == "_ipython_canary_method_should_not_exist_":
+            #raise AttributeError("what the ...?")
+            return 42 # this will prevent jupyter from poking around in this object (?)
+        #if name == "_ipython_display_":
+        #    traceback.print_stack()
+        #    raise AttributeError("why are you asking?")
+        self.error_if_fragile_reference_is_stale()
+        return self.referee[name]
+
+    # getattr and getitem are the same in Javascript
+    __getitem__ = __getattr__
 
 class CommandMaker(object):
 
@@ -954,7 +1025,6 @@ f();
 class SetMaker(CommandMaker):
     """
     Proxy container to set target.name = value.
-    For chaining the result is a reference to the target.
     """
 
     def __init__(self, target, name, value):
@@ -1107,6 +1177,8 @@ class LiteralMaker(CommandMaker):
 
 
 def quoteIfNeeded(arg):
+    #if type(arg) is FragileReference:
+    #    arg = arg.get_protected_content()
     if type(arg) in LiteralMaker.indicators:
         return LiteralMaker(arg)
     return arg
@@ -1115,3 +1187,23 @@ def quoteLists(args):
     "Wrap lists or dictionaries in the args in LiteralMakers"
     return [quoteIfNeeded(x) for x in args]
 
+
+class InvalidCommand(Exception):
+    "Invalid command"
+
+def debug_check_commands(command):
+    "raise an error if the command is not a basic json structure"
+    if command is None:
+        return command
+    ty = type(command)
+    if ty in (int, float, str):
+        return command
+    if ty in (tuple, list):
+        result = command
+        for x in command:
+            result = debug_check_commands(x)
+        return result
+    if ty is dict:
+        return debug_check_commands(list(command.items()))
+    # otherwise
+    raise InvalidCommand(repr(command))
