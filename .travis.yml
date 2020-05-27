@@ -14,7 +14,7 @@ before_install:
 - conda update -q conda
 # Useful for debugging any issues with conda
 - conda info -a
-- deps='pip coverage nose'
+- deps='pip coverage nose codecov'
 - conda create -q -n test-environment $deps
 - source activate test-environment
 - npm update
@@ -25,6 +25,12 @@ before_install:
 - jupyter labextension install ./js
 - cd end_to_end_tests
 install:
-- npm install
+- (cd end_to_end_tests && npm install)
+# trick from https://gist.github.com/jamesarosen/e29076bd81a099f0f72e
+env:
+- TEST_COMMAND="nosetests --with-coverage"
+- TEST_COMMAND="cd end_to_end_tests && npm test"
 script:
-- npm test
+- (eval "$TEST_COMMAND")
+after_success:
+- codecov
