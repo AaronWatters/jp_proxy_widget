@@ -33,5 +33,6 @@ env:
 script:
 - (eval "$TEST_COMMAND")
 after_success:
+- ls
 - if test -f "coverage.xml"; then codecov; fi
 
