@@ -1,6 +1,6 @@
-language: node
-node_js:
-- '10'
+language: python
+python:
+- 3.6
 branches:
   only:
   - master
@@ -15,7 +15,10 @@ before_install:
 - deps='pip coverage nose codecov'
 - conda create -q -n test-environment $deps
 - source activate test-environment
+- conda install -c conda-forge nodejs
 - npm update
+- npm -v
+- node -v
 - conda install -c conda-forge jupyterlab=2.1.2
 - conda install -c conda-forge ipywidgets
 - jupyter labextension install @jupyter-widgets/jupyterlab-manager
