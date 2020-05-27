@@ -34,5 +34,5 @@ script:
 - (eval "$TEST_COMMAND")
 after_success:
 - ls
-- if test -f "coverage.xml"; then codecov; fi
+- if test -f ".coverage"; then codecov; fi
 
