@@ -929,7 +929,7 @@ class FragileReference(object):
         return "FragileReference(%s)" % id(self.referee)
 
     def get_protected_content(self):
-        this.error_if_fragile_reference_is_stale()
+        self.error_if_fragile_reference_is_stale()
         return self.referee
 
     def error_if_fragile_reference_is_stale(self):
@@ -1150,7 +1150,14 @@ class LiteralMaker(CommandMaker):
     proxy references.
     """
 
-    indicators = {dict: "dict", list: "list", bytearray: "bytes"}
+    indicators = {
+        # things we can translate
+        dict: "dict", list: "list", bytearray: "bytes",
+        # we can't translate non-specific types, modules, etc.
+        type: "don't translate non-specific types, like classes",
+        type(json): "don't translate modules",
+        # xxxx should improve sanity checking on types...
+        }
 
     def __init__(self, thing):
         self.thing = thing
@@ -1165,6 +1172,7 @@ class LiteralMaker(CommandMaker):
         indicator = self.indicators.get(type(thing))
         #return [indicator, thing]
         if indicator:
+            # exact type equality here:
             if ty is list:
                 return [indicator] + quoteLists(thing)
             elif ty is dict:

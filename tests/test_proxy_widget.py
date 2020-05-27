@@ -543,8 +543,123 @@ class TestProxyWidget(unittest.TestCase):
         set_attribute = wrapper._set("some_attribute", "some value")
         assert widget.called
         assert widget.get_element.called
-        assert element._set.called
-        self.assertEquals(set_attribute, "dummy value")
+
+    def test_element_call_wrapper(self, *args):
+        widget = MagicMock(returns="dummy value")
+        widget.execute_and_return_fragile_reference = MagicMock()
+        widget.callable = MagicMock()
+        class MockElement:
+            def __getitem__(self, item):
+                return MagicMock()
+        element = MockElement()
+        wrapper = proxy_widget.ElementCallWrapper(widget, element, "slot_name")
+        call = wrapper(1, 3, list)
+        get = wrapper.some_attribute
+        assert widget.execute_and_return_fragile_reference.calleds
+
+    def test_fragile_reference(self, *args):
+        widget = proxy_widget.JSProxyWidget()
+        class MockedReferee:
+            called = False
+            attribute = False
+            def __call__(self, *args):
+                self.called = True
+                return args
+            def __getitem__(self, name):
+                self.attribute = True
+                return name
+        fake_referee = MockedReferee()
+        ref = proxy_widget.FragileReference(widget, fake_referee, "fake_cached")
+        # no error yet
+        content = ref.get_protected_content()
+        self.assertEqual(content, fake_referee)
+        call = ref(1,2,34)
+        self.assertEqual((1,2,34), call)
+        attr = ref["some_attribute"]
+        # coverage
+        ref._ipython_canary_method_should_not_exist_
+        self.assertEqual("some_attribute", attr)
+        ref2 = proxy_widget.FragileReference(widget, "fake_referee2", "fake_cached2")
+        # yes error
+        with self.assertRaises(proxy_widget.StaleFragileJavascriptReference):
+            content = ref.get_protected_content()
+
+    def test_command_maker(self, *args):
+        m = proxy_widget.CommandMaker("window")
+        exercised_methods = [
+            repr(m),
+            m.javascript(),
+            m._cmd(),
+            m.some_attribute,
+            m._set("an_attribute", "some_value"),
+            m._null(),
+        ]
+        self.assertEquals(len(exercised_methods), 6)
+        with self.assertRaises(ValueError):
+            m("Cannot call a top level command maker")
+
+    def test_call_maker(self, *args):
+        for kind in ["function", "method", "unknown"]:
+            c = proxy_widget.CallMaker(kind, proxy_widget.CommandMaker("window"), "arg2")
+            exercised = [
+                c.javascript(),
+                c("call returned value"),
+                c._cmd()
+            ]
+            self.assertEquals(len(exercised), 3)
+
+    def test_method_maker(self, *args):
+        c = proxy_widget.MethodMaker(proxy_widget.CommandMaker("window"), "method_name")
+        exercised = [
+            c.javascript(),
+            c("call the method"),
+            c._cmd()
+        ]
+        self.assertEquals(len(exercised), 3)
+
+    def test_literal_maker(self, *args):
+        for thing in (["a", "list"], {"a": "dictionary"}, bytearray(b"a bytearray")):
+            c = proxy_widget.LiteralMaker(thing)
+            exercised = [
+                c.javascript(),
+                c._cmd()
+            ]
+            self.assertEquals(len(exercised), 2)
+        with self.assertRaises(ValueError):
+            c = proxy_widget.LiteralMaker(proxy_widget) # can't translate a module
+            c._cmd()
+
+    def test_set_maker(self, *args):
+        c = proxy_widget.SetMaker(proxy_widget.CommandMaker("window"), "some_attribute", "some_value")
+        exercised = [
+            c.javascript(),
+            c._cmd()
+        ]
+        self.assertEquals(len(exercised), 2)
+
+    def test_loader(self, *args):
+        indicator = proxy_widget.LOAD_INDICATORS[0]
+        c = proxy_widget.Loader(indicator, "bogus_name", "bogus content")
+        exercised = [
+            c._cmd()
+        ]
+        self.assertEquals(len(exercised), 1)
+        with self.assertRaises(NotImplementedError):
+            test = c.javascript()
+
+    def test_debug_check_commands(self, *args):
+        cmds = [
+            None,
+            123,
+            123.4,
+            "a string",
+            ("a", "tuple"),
+            {"a": "dict"},
+            ["another", "list"]
+        ]
+        test = proxy_widget.debug_check_commands(cmds)
+        with self.assertRaises(proxy_widget.InvalidCommand):
+            proxy_widget.debug_check_commands([proxy_widget])
 
 
 class RequireMockElement:
