@@ -27,7 +27,7 @@ install:
 - (cd end_to_end_tests && npm install)
 # trick from https://gist.github.com/jamesarosen/e29076bd81a099f0f72e
 env:
-- TEST_COMMAND="nosetests --with-coverage --cover-package=jp_proxy_widget"
+- TEST_COMMAND="nosetests --with-coverage"
 - TEST_COMMAND="cd end_to_end_tests && npm test"
 script:
 - (eval "$TEST_COMMAND")
