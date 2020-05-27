@@ -475,6 +475,78 @@ class TestProxyWidget(unittest.TestCase):
         widget.send_command = MagicMock()
         widget.js_debug()
 
+    @patch("jp_proxy_widget.proxy_widget.print")
+    def test_print_status(self, p):
+        widget = proxy_widget.JSProxyWidget()
+        widget.print_status()
+        assert p.called
+
+    def test_load_js_files(self, *args):
+        widget = proxy_widget.JSProxyWidget()
+        def mock_callable(c):
+            return c
+        widget.callable = mock_callable
+        def mock_test_js_loaded(paths, dummy, callback):
+            callback()
+        widget.element.test_js_loaded = mock_test_js_loaded
+        widget.load_js_files(["js/simple.js"], force=False)
+        widget.load_js_files(["js/simple.js"], force=True)
+
+    def test_load_css_command(self, *args):
+        widget = proxy_widget.JSProxyWidget()
+        widget.load_css_command("dummy.css", "this is not really css text content")
+
+    def test_validate_commands(self, *args):
+        call_args = [
+            ["element"],
+            ["window"],
+        ]
+        [numerical_identifier, untranslated_data, level, segmented] = [123, "whatever", 2, 10000]
+        commands = call_args + [
+            ["method", ["element"], "method_name"] + call_args,
+            ["function", ["element"]] + call_args,
+            ["id", "untranslated"],
+            ["bytes", u"12ff"],
+            ["list"] + call_args,
+            ["dict", {"key": ["element"]}],
+            ["callback", numerical_identifier, untranslated_data, level, segmented],
+            ["get", ["element"], "whatever"],
+            ["set", ["element"], "whatever", ["window"]],
+            ["null", ["element"]],
+        ]
+        proxy_widget.validate_commands(commands)
+        with self.assertRaises(ValueError):
+            proxy_widget.validate_commands([["BAD_INDICATOR", "OTHER", "STUFF"]])
+        with self.assertRaises(ValueError):
+            proxy_widget.validate_command("TOP LEVEL COMMAND MUST BE A LIST", top=True)
+
+    def test_indent(self, *args):
+        indented = proxy_widget.indent_string("a\nx", level=3, indent=" ")
+        self.assertEquals("a\n   x", indented)
+
+    def test_to_javascript(self, *args):
+        thing = [
+            {"a": proxy_widget.CommandMaker("window")},
+            "a string",
+            ["a string in a list"],
+            bytearray(b"a byte array"),
+        ]
+        js = proxy_widget.to_javascript(thing)
+
+    def test_element_wrapper(self, *args):
+        widget = MagicMock(returns="dummy value")
+        element = MagicMock()
+        widget.get_element = MagicMock(returns=element)
+        element._set = MagicMock()
+        wrapper = proxy_widget.ElementWrapper(widget)
+        get_attribute = wrapper.some_attribute
+        set_attribute = wrapper._set("some_attribute", "some value")
+        assert widget.called
+        assert widget.get_element.called
+        assert element._set.called
+        self.assertEquals(set_attribute, "dummy value")
+
+
 class RequireMockElement:
     "Used for mocking the element when testing loading requirejs"
     require_is_loaded = False
