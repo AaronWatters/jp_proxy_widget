@@ -114,6 +114,7 @@ import types
 import traceback
 from . import js_context
 from .hex_codec import hex_to_bytearray, bytearray_to_hex
+from pprint import pprint
 
 # In the IPython context get_ipython is a builtin.
 # get a reference to the IPython notebook object.
@@ -144,7 +145,7 @@ BIG_SEGMENT = 1000000
 
 @widgets.register
 class JSProxyWidget(widgets.DOMWidget):
-    """Introspective javascript proxy widget."""
+    """Introspective javascript proxy widget.""" 
     _view_name = Unicode('JSProxyView').tag(sync=True)
     _model_name = Unicode('JSProxyModel').tag(sync=True)
     _view_module = Unicode('jp_proxy_widget').tag(sync=True)
@@ -194,19 +195,29 @@ class JSProxyWidget(widgets.DOMWidget):
         # Used for D3 style "chaining" -- reference to last object reference cached on JS side
         self.last_fragile_reference = None
         #self.executing_fragile = False
+        # standard initialization in javascript
+        self.js_init("""
+            // make the window accessible through the element
+            element.window = window;
+        """)
 
     def execute_and_return_fragile_reference(self, for_action):
         "This is a trick to support D3-style chaining of Python expressions that map to Javascript."
         #if self.executing_fragile:
         #    raise ValueError("recursing in fragile execution")
-        self.executing_fragile = True
+        #self.executing_fragile = True
         #("execute_and_return_fragile_reference(")
         # execute the action and cache the result temporarily
-        self.element._set(FRAGILE_JS_REFERENCE, for_action)
+        #self.element._set(FRAGILE_JS_REFERENCE, for_action)
         # DON'T execute it twice
         #self(cached)
-        reference = self.element[FRAGILE_JS_REFERENCE]
+        #reference = self.element[FRAGILE_JS_REFERENCE]
         #self.executing_fragile = False
+        #reference = ["get", ["element"], FRAGILE_JS_REFERENCE]
+        #execute_action = ["set", ["element"], FRAGILE_JS_REFERENCE, for_action]
+        execute_action = SetMaker(self.get_element(), FRAGILE_JS_REFERENCE, for_action)
+        self.send_command(execute_action)
+        reference = MethodMaker(self.get_element(), FRAGILE_JS_REFERENCE)
         return FragileReference(self, reference, for_action)
 
     def set_element(self, slot_name, value):
@@ -244,11 +255,13 @@ class JSProxyWidget(widgets.DOMWidget):
                 return dict((a, listiffy(b)) for (a,b) in v.items())
             else:
                 return v
-        def map_value(v):
-            if callable(v):
-                return self.callable(v, level=callable_level)
-            return listiffy(v)
-        other_argument_values = [map_value(other_arguments[name]) for name in other_argument_names]
+        #def map_value(v):
+        #    if callable(v):
+        #        return self.callable(v, level=callable_level)
+        #    return listiffy(v)
+        #other_argument_values = [map_value(other_arguments[name]) for name in other_argument_names]
+        other_argument_values = [other_arguments[name] for name in other_argument_names]
+        other_argument_values = self.wrap_callables(other_argument_values)
         argument_names = list(["element"] + other_argument_names)
         argument_values = list([self.get_element()] + other_argument_values)
         function = self.function(argument_names, js_function_body)
@@ -263,6 +276,20 @@ class JSProxyWidget(widgets.DOMWidget):
         else:
             # just execute it
             action()
+
+    def wrap_callables(self, x, callable_level=3):
+        if callable(x) and not isinstance(x, CommandMakerSuperClass):
+            return self.callable(x, level=callable_level)
+        w = self.wrap_callables
+        ty = type(x)
+        if ty is list:
+            return list(w(y) for y in x)
+        if ty is tuple:
+            return tuple(w(y) for y in x)
+        if ty is dict:
+            return dict((k, w(v)) for (k,v) in x.items())
+        # default
+        return x
 
     print_on_error = True
 
@@ -285,6 +312,11 @@ class JSProxyWidget(widgets.DOMWidget):
             INDICATOR: indicator,
             PAYLOAD: payload,
         }
+        # XXXX debug
+        self._last_payload = payload
+        #p("sending")
+        #pprint(package)
+        debug_check_commands(package)
         self.send(package)
 
     # slot for last message data debugging
@@ -324,7 +356,7 @@ class JSProxyWidget(widgets.DOMWidget):
     def handle_custom_message(self, widget, data, *etcetera):
         try:
             self._last_message_data = data
-            indicator = data[INDICATOR];
+            indicator = data[INDICATOR]
             payload = data[PAYLOAD]
             if indicator == RESULTS:
                 self.results = payload
@@ -361,7 +393,8 @@ class JSProxyWidget(widgets.DOMWidget):
 
     def __call__(self, command):
         "Add a command to the buffered commands. Convenience."
-        self.buffered_commands.append(command)
+        #self.buffered_commands.append(command)
+        self.send_command(command)
         if self.auto_flush:
             self.flush()
         return command
@@ -385,6 +418,9 @@ class JSProxyWidget(widgets.DOMWidget):
         value is a reference to the element by name.
         """
         elt = self.get_element()
+        if callable(reference):
+            # convert to javascript callback
+            reference = self.callable(reference)  # XXXX should generalize this to allow callablse of lists etc
         save_command = elt._set(name, reference)
         # buffer the save operation
         self(save_command)
@@ -582,7 +618,7 @@ class JSProxyWidget(widgets.DOMWidget):
         self.counter = count + 1
         commands_iter = list(commands_iter)
         qcommands = list(map(quoteIfNeeded, commands_iter))
-        commands = validate_commands(qcommands)
+        commands = self.validate_commands(qcommands)
         if check:
             debug_check_commands(commands)
         if self.rendered:
@@ -677,6 +713,7 @@ class JSProxyWidget(widgets.DOMWidget):
                     count += 1
                 else:
                     break
+            #p("XXXXX callback args", py_arguments)
             function_or_method(*py_arguments)
         return self.callback(callback_function, data, level, delay, segmented)
 
@@ -687,6 +724,8 @@ class JSProxyWidget(widgets.DOMWidget):
         assert segmented is None or (type(segmented) is int and segmented > 0), "bad segment " + repr(segmented)
         count = self.counter
         self.counter = count + 1
+        assert not isinstance(callback_function, CommandMakerSuperClass), "can't callback command maker " + type(callback_function)
+        assert not str(data).startswith("Fragile"), "DEBUG::" + repr(data)
         command = CallMaker("callback", count, data, level, segmented)
         #if delay:
         #    callback_function = delay_in_thread(callback_function)
@@ -754,84 +793,90 @@ class JSProxyWidget(widgets.DOMWidget):
         return Loader(LOAD_CSS, css_name, css_text)
 
 
-def validate_commands(commands, top=True):
-    """
-    Validate a command sequence (and convert to list format if needed.)
-    """
-    return [validate_command(c, top) for c in commands]
+    def validate_commands(self, commands, top=True):
+        """
+        Validate a command sequence (and convert to list format if needed.)
+        """
+        return [self.validate_command(c, top) for c in commands]
 
-
-def validate_command(command, top=True):
-    # convert CommandMaker to list format.
-    if isinstance(command, CommandMaker):
-        command = command._cmd()
-    ty = type(command)
-    if ty is list:
-        indicator = command[0]
-        remainder = command[1:]
-        if indicator == "element" or indicator == "window":
-            assert len(remainder) == 0
-        elif indicator == "method":
-            target = remainder[0]
-            name = remainder[1]
-            args = remainder[2:]
-            target = validate_command(target, top=True)
-            assert type(name) is str, "method name must be a string " + repr(name)
-            args = validate_commands(args, top=False)
-            remainder = [target, name] + args
-        elif indicator == "function":
-            target = remainder[0]
-            args = remainder[1:]
-            target = validate_command(target, top=True)
-            args = validate_commands(args, top=False)
-            remainder = [target] + args
-        elif indicator == "id" or indicator == "bytes":
-            assert len(remainder) == 1, "id or bytes takes one argument only " + repr(remainder)
-        elif indicator in LOAD_INDICATORS:
-            assert len(remainder) == 2, "loaders take exactly 2 arguments" + repr(len(remainder))
-        elif indicator == "list":
-            remainder = validate_commands(remainder, top=False)
-        elif indicator == "dict":
-            [d] = remainder
-            d = dict((k, validate_command(d[k], top=False)) for k in d)
-            remainder = [d]
-        elif indicator == "callback":
-            [numerical_identifier, untranslated_data, level, segmented] = remainder
-            assert type(numerical_identifier) is int, \
-                "must be integer " + repr(numerical_identifier)
-            assert type(level) is int, \
-                "must be integer " + repr(level)
-            assert (segmented is None) or (type(segmented) is int and segmented > 0), \
-                "must be None or positive integer " + repr(segmented)
-        elif indicator == "get":
-            [target, name] = remainder
-            target = validate_command(target, top=True)
-            name = validate_command(name, top=False)
-            remainder = [target, name]
-        elif indicator == "set":
-            [target, name, value] = remainder
-            target = validate_command(target, top=True)
-            name = validate_command(name, top=False)
-            value = validate_command(value, top=False)
-            remainder = [target, name, value]
-        elif indicator == "null":
-            [target] = remainder
-            remainder = [validate_command(target, top=False)]
-        else:
-            raise ValueError("bad indicator " + repr(indicator))
-        command = [indicator] + remainder
-    elif top:
-        raise ValueError("top level command must be a list " + repr(command))
-    # Non-lists are untranslated (but should be JSON compatible).
-    return command
+    def validate_command(self, command, top=True):
+        # convert CommandMaker to list format.
+        if isinstance(command, CommandMakerSuperClass):
+            #p("XXXXX CONVERTING COMMAND MAKER", type(command), command)
+            command = command._cmd()
+            #p("XXXXX CONVERTed COMMAND MAKER", type(command), command)
+        elif callable(command):
+            # otherwise convert callables to callbacks, in list format
+            command = self.callable(command)._cmd()
+        assert not isinstance(command, CommandMakerSuperClass), repr((type(command), command))
+        ty = type(command)
+        if ty is list:
+            indicator = command[0]
+            remainder = command[1:]
+            if indicator == "element" or indicator == "window":
+                assert len(remainder) == 0
+            elif indicator == "method":
+                target = remainder[0]
+                name = remainder[1]
+                args = remainder[2:]
+                target = self.validate_command(target, top=True)
+                assert type(name) is str, "method name must be a string " + repr(name)
+                args = self.validate_commands(args, top=False)
+                remainder = [target, name] + args
+                #p("XXXX validated method remainder", remainder)
+            elif indicator == "function":
+                target = remainder[0]
+                args = remainder[1:]
+                target = self.validate_command(target, top=True)
+                args = self.validate_commands(args, top=False)
+                remainder = [target] + args
+            elif indicator == "id" or indicator == "bytes":
+                assert len(remainder) == 1, "id or bytes takes one argument only " + repr(remainder)
+            elif indicator in LOAD_INDICATORS:
+                assert len(remainder) == 2, "loaders take exactly 2 arguments" + repr(len(remainder))
+            elif indicator == "list":
+                remainder = self.validate_commands(remainder, top=False)
+            elif indicator == "dict":
+                [d] = remainder
+                d = dict((k, self.validate_command(d[k], top=False)) for k in d)
+                remainder = [d]
+            elif indicator == "callback":
+                [numerical_identifier, untranslated_data, level, segmented] = remainder
+                assert type(numerical_identifier) is int, \
+                    "must be integer " + repr(numerical_identifier)
+                assert type(level) is int, \
+                    "must be integer " + repr(level)
+                assert (segmented is None) or (type(segmented) is int and segmented > 0), \
+                    "must be None or positive integer " + repr(segmented)
+            elif indicator == "get":
+                [target, name] = remainder
+                target = self.validate_command(target, top=True)
+                name = self.validate_command(name, top=False)
+                remainder = [target, name]
+            elif indicator == "set":
+                [target, name, value] = remainder
+                target = self.validate_command(target, top=True)
+                name = self.validate_command(name, top=False)
+                value = self.validate_command(value, top=False)
+                remainder = [target, name, value]
+            elif indicator == "null":
+                [target] = remainder
+                remainder = [self.validate_command(target, top=False)]
+            else:
+                raise ValueError("bad indicator " + repr(indicator))
+            command = [indicator] + remainder
+        elif top:
+            raise ValueError("top level command must be a list " + repr(command))
+        # Non-lists are untranslated (but should be JSON compatible).
+        return command
 
 def indent_string(s, level, indent="    "):
     lindent = indent * level
     return s.replace("\n", "\n" + lindent)
 
 def to_javascript(thing, level=0, indent=None, comma=","):
-    if isinstance(thing, CommandMaker):
-        return thing.javascript(level)
+    if isinstance(thing, CommandMakerSuperClass):
+        result = thing.javascript(level)
     else:
         ty = type(thing)
         json_value = None
@@ -848,7 +893,9 @@ def to_javascript(thing, level=0, indent=None, comma=","):
             json_value = "Uint8Array(%s)" % inner
         elif json_value is None:
             json_value = json.dumps(thing, indent=indent)
-        return indent_string(json_value, level)
+        result = indent_string(json_value, level)
+    assert type(result) is str, repr((thing, result))
+    return result
 
 
 class ElementWrapper(object):
@@ -890,7 +937,8 @@ class ElementCallWrapper(object):
     
     def map_value(self, v):
         widget = self.widget
-        if callable(v):
+        if (not isinstance(v, CommandMakerSuperClass)) and callable(v):
+            #p("XXXX mapping", type(v), v)
             return widget.callable(v, level=self.callable_level)
         return v
 
@@ -898,18 +946,22 @@ class ElementCallWrapper(object):
         # ("elementcallwrapper.__call__")
         mapped_args = map(self.map_value, args)
         widget = self.widget
-        element = self.element
-        slot = element[self.slot_name]
         #widget(slot(*mapped_args))
-        call = slot(*mapped_args)
+        args = widget.wrap_callables(args)
+        call = CallMaker("method", widget.get_element(), self.slot_name, *args)
         return widget.execute_and_return_fragile_reference(call)
 
     def __getattr__(self, name):
         widget = self.widget
-        for_element = self.element[self.slot_name]
+        #for_element = self.element[self.slot_name]
         #get = ElementCallWrapper(self.widget, for_element, name)
-        get = for_element[name]
-        return widget.execute_and_return_fragile_reference(get)
+        #get = for_element[name]
+        #return widget.execute_and_return_fragile_reference(get)
+        command = MethodMaker(
+            MethodMaker(widget.get_element(), self.slot_name),
+            name
+        )
+        return widget.execute_and_return_fragile_reference(command)
 
     # getattr and getitem are the same in Javascript
     __getitem__ = __getattr__
@@ -917,9 +969,16 @@ class ElementCallWrapper(object):
 class StaleFragileJavascriptReference(ValueError):
     "Stale Javascript value reference"
 
-class FragileReference(object):
+class CommandMakerSuperClass(object):
+    """
+    Superclass for command proxy objects.
+    """
+    pass
+
+class FragileReference(CommandMakerSuperClass):
 
     def __init__(self, for_widget, referee, cached):
+        assert not isinstance(referee, FragileReference), "bad ref to ref: " + repr(referee)
         self.widget = for_widget
         self.referee = referee
         self.cached = cached
@@ -940,10 +999,25 @@ class FragileReference(object):
                     + "  " + repr(self.cached)
                 )
 
+    def javascript(self, level=0):
+        content = self.get_protected_content()
+        result = content.javascript(level)
+        assert type(result) is str, repr((result, type(content), content))
+        return result
+
+    def _cmd(self):
+        return self.get_protected_content()._cmd()
+
     def __call__(self, *args):
         #("fragilereference.__call__", args)
         self.error_if_fragile_reference_is_stale()
-        return self.referee(*args)
+        #return self.referee(*args)
+        action = CallMaker(
+            "function",
+            MethodMaker(self.widget.get_element(), FRAGILE_JS_REFERENCE),
+            *args
+        )
+        return self.widget.execute_and_return_fragile_reference(action)
 
     def __getattr__(self, name):
         #("fragilereference.__getattr__", name)
@@ -954,12 +1028,16 @@ class FragileReference(object):
         #    traceback.print_stack()
         #    raise AttributeError("why are you asking?")
         self.error_if_fragile_reference_is_stale()
-        return self.referee[name]
+        action = MethodMaker(
+            MethodMaker(self.widget.get_element(), FRAGILE_JS_REFERENCE),
+            name
+        )
+        return self.widget.execute_and_return_fragile_reference(action)
 
     # getattr and getitem are the same in Javascript
     __getitem__ = __getattr__
 
-class CommandMaker(object):
+class CommandMaker(CommandMakerSuperClass):
 
     """
     Superclass for command proxy objects.
@@ -1031,6 +1109,7 @@ class SetMaker(CommandMaker):
         self.target = target
         self.name = name
         self.value = value
+        ##p ("XXXX initialized setmaker: " + self.javascript())
 
     def javascript(self, level=0):
         innerlevel = 2
@@ -1116,14 +1195,14 @@ class CallMaker(CommandMaker):
         # Add newlines in case of long chains.
         if kind == "function":
             function_desc = args[0]
-            function_args = args[1:]
+            function_args = [to_javascript(x) for x in args[1:]]
             function_value = to_javascript(function_desc)
             call_js = "%s\n%s" % (function_value, format_args(function_args))
             return indent_string(call_js, level)
         elif kind == "method":
             target_desc = args[0]
             name = args[1]
-            method_args = args[2:]
+            method_args = [to_javascript(x) for x in args[2:]]
             target_value = to_javascript(target_desc)
             name_value = to_javascript(name)
             method_js = "%s\n[%s]\n%s" % (target_value, name_value, format_args(method_args))
@@ -1198,6 +1277,8 @@ def quoteLists(args):
 
 class InvalidCommand(Exception):
     "Invalid command"
+
+
 
 def debug_check_commands(command):
     "raise an error if the command is not a basic json structure"
