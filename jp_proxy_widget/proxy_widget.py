@@ -140,6 +140,9 @@ LOAD_INDICATORS = [LOAD_CSS, LOAD_JS]
 # This slot name is used to support D3-style chaining under some circumstances
 FRAGILE_JS_REFERENCE = "_FRAGILE_JS_REFERENCE"
 
+# Reference used for method resolution
+FRAGILE_THIS = "_FRAGILE_THIS"
+
 # Message segmentation size default
 BIG_SEGMENT = 1000000
 
@@ -192,6 +195,7 @@ class JSProxyWidget(widgets.DOMWidget):
         self.last_callback_results = None
         self.results = []
         self.status = "Not yet rendered"
+        self.last_attribute = None
         # Used for D3 style "chaining" -- reference to last object reference cached on JS side
         self.last_fragile_reference = None
         #self.executing_fragile = False
@@ -199,6 +203,7 @@ class JSProxyWidget(widgets.DOMWidget):
         self.js_init("""
             // make the window accessible through the element
             element.window = window;
+            element._FRAGILE_THIS = null;
         """)
 
     def execute_and_return_fragile_reference(self, for_action):
@@ -215,8 +220,14 @@ class JSProxyWidget(widgets.DOMWidget):
         #self.executing_fragile = False
         #reference = ["get", ["element"], FRAGILE_JS_REFERENCE]
         #execute_action = ["set", ["element"], FRAGILE_JS_REFERENCE, for_action]
+        # Save action stores value used as "this" in chained method calls
+        save_action = SetMaker(
+            self.get_element(), 
+            FRAGILE_THIS,
+            MethodMaker(self.get_element(), FRAGILE_JS_REFERENCE)
+            )
         execute_action = SetMaker(self.get_element(), FRAGILE_JS_REFERENCE, for_action)
-        self.send_command(execute_action)
+        self.send_commands([save_action, execute_action])
         reference = MethodMaker(self.get_element(), FRAGILE_JS_REFERENCE)
         return FragileReference(self, reference, for_action)
 
@@ -246,6 +257,7 @@ class JSProxyWidget(widgets.DOMWidget):
         #pr ("js_init")
         #pr(js_function_body)
         other_argument_names = list(other_arguments.keys())
+        #pr ("other names", other_argument_names)
         def listiffy(v):
             "convert tuples and elements of tuples to lists"
             type_v = type(v)
@@ -255,13 +267,15 @@ class JSProxyWidget(widgets.DOMWidget):
                 return dict((a, listiffy(b)) for (a,b) in v.items())
             else:
                 return v
-        #def map_value(v):
-        #    if callable(v):
-        #        return self.callable(v, level=callable_level)
-        #    return listiffy(v)
-        #other_argument_values = [map_value(other_arguments[name]) for name in other_argument_names]
-        other_argument_values = [other_arguments[name] for name in other_argument_names]
-        other_argument_values = self.wrap_callables(other_argument_values)
+        def map_value(v):
+            #if callable(v):
+            #    return self.callable(v, level=callable_level)
+            v = self.wrap_callables(v, callable_level=callable_level)
+            return listiffy(v)
+        other_argument_values = [map_value(other_arguments[name]) for name in other_argument_names]
+        #pr( "other_values", other_argument_values)
+        #other_argument_values = [other_arguments[name] for name in other_argument_names]
+        #other_argument_values = self.wrap_callables(other_argument_values)
         argument_names = list(["element"] + other_argument_names)
         argument_values = list([self.get_element()] + other_argument_values)
         function = self.function(argument_names, js_function_body)
@@ -314,7 +328,7 @@ class JSProxyWidget(widgets.DOMWidget):
         }
         # XXXX debug
         self._last_payload = payload
-        #p("sending")
+        #pr("sending")
         #pprint(package)
         debug_check_commands(package)
         self.send(package)
@@ -354,6 +368,8 @@ class JSProxyWidget(widgets.DOMWidget):
         return assembly
 
     def handle_custom_message(self, widget, data, *etcetera):
+        #pr("handle custom message")
+        #pprint(data)
         try:
             self._last_message_data = data
             indicator = data[INDICATOR]
@@ -589,6 +605,8 @@ class JSProxyWidget(widgets.DOMWidget):
 
     def handle_callback_results(self, new):
         "Callback for when the JS View sends an event notification."
+        #pr ("HANDLE CALLBACK RESULTS")
+        #pprint(new)
         self.last_callback_results = new
         if self.verbose:
             print ("got callback results", new)
@@ -910,6 +928,7 @@ class ElementWrapper(object):
     """
 
     def __init__(self, for_widget):
+        assert isinstance(for_widget, JSProxyWidget)
         self.widget = for_widget
         self.widget_element = for_widget.get_element()
 
@@ -927,41 +946,69 @@ class ElementWrapper(object):
         return self.widget(self.widget_element._set(name, value))
 
 class ElementCallWrapper(object):
+    """
+    Wrapper for widget.element.slot_name
+    """
 
     callable_level = 2   # ???
 
     def __init__(self, for_widget, for_element, slot_name):
+        assert isinstance(for_widget, JSProxyWidget)
         self.widget = for_widget
         self.element = for_element
         self.slot_name = slot_name
-    
-    def map_value(self, v):
+
+    def set_context(self):
         widget = self.widget
-        if (not isinstance(v, CommandMakerSuperClass)) and callable(v):
-            #p("XXXX mapping", type(v), v)
-            return widget.callable(v, level=self.callable_level)
-        return v
+        self.widget.last_attribute = name
+        setthis = SetMaker(widget.get_element(), FRAGILE_THIS, widget.get_element())
+        setref = SetMaker(
+            widget.get_element(),
+            FRAGILE_JS_REFERENCE,
+            MethodMaker(widget.get_element(), name)
+        )
+        widget.send_commands([setthis, setref])
+    
+    #def map_value(self, v):
+    #    widget = self.widget
+    #    if (not isinstance(v, CommandMakerSuperClass)) and callable(v):
+    #        #p("XXXX mapping", type(v), v)
+    #        return widget.callable(v, level=self.callable_level)
+    #    return v
 
     def __call__(self, *args):
         # ("elementcallwrapper.__call__")
-        mapped_args = map(self.map_value, args)
+        #mapped_args = map(self.map_value, args)
         widget = self.widget
+        mapped_args = self.widget.wrap_callables(args)
         #widget(slot(*mapped_args))
         args = widget.wrap_callables(args)
         call = CallMaker("method", widget.get_element(), self.slot_name, *args)
-        return widget.execute_and_return_fragile_reference(call)
+        #p("reset in elementcallwrapper call")
+        widget.last_attribute = None
+        setref = SetMaker(widget.get_element(), FRAGILE_JS_REFERENCE, call)
+        widget.send_command(setref)
+        reference = MethodMaker(widget.get_element(), FRAGILE_JS_REFERENCE)
+        return FragileReference(self.widget, reference, call)
 
     def __getattr__(self, name):
+        assert isinstance(self.widget, JSProxyWidget)
+        if name=="wrap_callables":
+            raise SystemError(name)
         widget = self.widget
         #for_element = self.element[self.slot_name]
         #get = ElementCallWrapper(self.widget, for_element, name)
         #get = for_element[name]
         #return widget.execute_and_return_fragile_reference(get)
-        command = MethodMaker(
-            MethodMaker(widget.get_element(), self.slot_name),
-            name
-        )
-        return widget.execute_and_return_fragile_reference(command)
+        this_ref = MethodMaker(widget.get_element(), self.slot_name)
+        attr_ref = MethodMaker(this_ref, name)
+        #p ("set in elementcallwrapper getattr", repr(name))
+        self.widget.last_attribute = name
+        set_this = SetMaker(widget.get_element(), FRAGILE_THIS, this_ref)
+        set_ref = SetMaker(widget.get_element(), FRAGILE_JS_REFERENCE, attr_ref)
+        widget.send_commands([set_this, set_ref])
+        reference = MethodMaker(widget.get_element(), FRAGILE_JS_REFERENCE)
+        return FragileReference(self.widget, reference, attr_ref)
 
     # getattr and getitem are the same in Javascript
     __getitem__ = __getattr__
@@ -979,10 +1026,12 @@ class FragileReference(CommandMakerSuperClass):
 
     def __init__(self, for_widget, referee, cached):
         assert not isinstance(referee, FragileReference), "bad ref to ref: " + repr(referee)
+        assert isinstance(for_widget, JSProxyWidget)
         self.widget = for_widget
         self.referee = referee
         self.cached = cached
         self.widget.last_fragile_reference = self
+        #self.widget.last_attribute = None
 
     def __repr__(self):
         return "FragileReference(%s)" % id(self.referee)
@@ -1011,28 +1060,49 @@ class FragileReference(CommandMakerSuperClass):
     def __call__(self, *args):
         #("fragilereference.__call__", args)
         self.error_if_fragile_reference_is_stale()
+        widget = self.widget
+        #p ("args", args)
+        args = widget.wrap_callables(args)
         #return self.referee(*args)
-        action = CallMaker(
-            "function",
-            MethodMaker(self.widget.get_element(), FRAGILE_JS_REFERENCE),
-            *args
-        )
-        return self.widget.execute_and_return_fragile_reference(action)
+        # try to call a method of fragile this
+        last_attribute = self.widget.last_attribute
+        if type(last_attribute) is str:
+            action = CallMaker(
+                "method",
+                MethodMaker(widget.get_element(), FRAGILE_THIS),
+                last_attribute,
+                *args
+            )
+        else:
+            # otherwise call the fragile reference as a function
+            action = CallMaker(
+                "function",
+                MethodMaker(widget.get_element(), FRAGILE_JS_REFERENCE),
+                *args
+            )
+        #p("reset in FR __call__")
+        self.widget.last_attribute = None
+        setref = SetMaker(widget.get_element(), FRAGILE_JS_REFERENCE, action)
+        widget.send_command(setref)
+        reference = MethodMaker(widget.get_element(), FRAGILE_JS_REFERENCE)
+        return FragileReference(self.widget, reference, action)
 
     def __getattr__(self, name):
         #("fragilereference.__getattr__", name)
         if name == "_ipython_canary_method_should_not_exist_":
             #raise AttributeError("what the ...?")
             return 42 # this will prevent jupyter from poking around in this object (?)
-        #if name == "_ipython_display_":
-        #    traceback.print_stack()
-        #    raise AttributeError("why are you asking?")
         self.error_if_fragile_reference_is_stale()
-        action = MethodMaker(
-            MethodMaker(self.widget.get_element(), FRAGILE_JS_REFERENCE),
-            name
-        )
-        return self.widget.execute_and_return_fragile_reference(action)
+        #p("set in FR getattr", name)
+        widget = self.widget
+        widget.last_attribute = name
+        this_ref = MethodMaker(self.widget.get_element(), FRAGILE_JS_REFERENCE)
+        attr_ref = MethodMaker(this_ref,  name)
+        set_this = SetMaker(widget.get_element(), FRAGILE_THIS, this_ref)
+        set_ref = SetMaker(widget.get_element(), FRAGILE_JS_REFERENCE, attr_ref)
+        widget.send_commands([set_this, set_ref])
+        reference = MethodMaker(widget.get_element(), FRAGILE_JS_REFERENCE)
+        return FragileReference(widget, reference, attr_ref)
 
     # getattr and getitem are the same in Javascript
     __getitem__ = __getattr__
