@@ -1355,7 +1355,7 @@ def debug_check_commands(command):
     if command is None:
         return command
     ty = type(command)
-    if ty in (int, float, str):
+    if ty in (int, float, str,  bool):
         return command
     if ty in (tuple, list):
         result = command
