@@ -153,8 +153,8 @@ class JSProxyWidget(widgets.DOMWidget):
     _model_name = Unicode('JSProxyModel').tag(sync=True)
     _view_module = Unicode('jp_proxy_widget').tag(sync=True)
     _model_module = Unicode('jp_proxy_widget').tag(sync=True)
-    _view_module_version = Unicode('^1.0.3').tag(sync=True)
-    _model_module_version = Unicode('^1.0.3').tag(sync=True)
+    _view_module_version = Unicode('^1.0.4').tag(sync=True)
+    _model_module_version = Unicode('^1.0.4').tag(sync=True)
 
     # traitlet port to use for sending commands to javascript
     #commands = traitlets.List([], sync=True)
@@ -958,16 +958,16 @@ class ElementCallWrapper(object):
         self.element = for_element
         self.slot_name = slot_name
 
-    def set_context(self):
-        widget = self.widget
-        self.widget.last_attribute = name
-        setthis = SetMaker(widget.get_element(), FRAGILE_THIS, widget.get_element())
-        setref = SetMaker(
-            widget.get_element(),
-            FRAGILE_JS_REFERENCE,
-            MethodMaker(widget.get_element(), name)
-        )
-        widget.send_commands([setthis, setref])
+    #def set_context(self):
+    #    widget = self.widget
+    #    self.widget.last_attribute = name
+    #    setthis = SetMaker(widget.get_element(), FRAGILE_THIS, widget.get_element())
+    #    setref = SetMaker(
+    #        widget.get_element(),
+    #        FRAGILE_JS_REFERENCE,
+    #        MethodMaker(widget.get_element(), name)
+    #    )
+    #   widget.send_commands([setthis, setref])
     
     #def map_value(self, v):
     #    widget = self.widget
@@ -1088,6 +1088,7 @@ class FragileReference(CommandMakerSuperClass):
         return FragileReference(self.widget, reference, action)
 
     def __getattr__(self, name):
+        assert type(name) in [str, int], "Only string or int attributes supported from Python interface " + repr(name)
         #("fragilereference.__getattr__", name)
         if name == "_ipython_canary_method_should_not_exist_":
             #raise AttributeError("what the ...?")
