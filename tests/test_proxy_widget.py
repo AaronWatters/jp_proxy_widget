@@ -657,7 +657,9 @@ class TestProxyWidget(unittest.TestCase):
             "a string",
             ("a", "tuple"),
             {"a": "dict"},
-            ["another", "list"]
+            ["another", "list"],
+            True,
+            False,
         ]
         test = proxy_widget.debug_check_commands(cmds)
         with self.assertRaises(proxy_widget.InvalidCommand):
