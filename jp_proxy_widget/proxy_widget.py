@@ -206,31 +206,6 @@ class JSProxyWidget(widgets.DOMWidget):
             element._FRAGILE_THIS = null;
         """)
 
-    def execute_and_return_fragile_reference(self, for_action):
-        "This is a trick to support D3-style chaining of Python expressions that map to Javascript."
-        #if self.executing_fragile:
-        #    raise ValueError("recursing in fragile execution")
-        #self.executing_fragile = True
-        #("execute_and_return_fragile_reference(")
-        # execute the action and cache the result temporarily
-        #self.element._set(FRAGILE_JS_REFERENCE, for_action)
-        # DON'T execute it twice
-        #self(cached)
-        #reference = self.element[FRAGILE_JS_REFERENCE]
-        #self.executing_fragile = False
-        #reference = ["get", ["element"], FRAGILE_JS_REFERENCE]
-        #execute_action = ["set", ["element"], FRAGILE_JS_REFERENCE, for_action]
-        # Save action stores value used as "this" in chained method calls
-        save_action = SetMaker(
-            self.get_element(), 
-            FRAGILE_THIS,
-            MethodMaker(self.get_element(), FRAGILE_JS_REFERENCE)
-            )
-        execute_action = SetMaker(self.get_element(), FRAGILE_JS_REFERENCE, for_action)
-        self.send_commands([save_action, execute_action])
-        reference = MethodMaker(self.get_element(), FRAGILE_JS_REFERENCE)
-        return FragileReference(self, reference, for_action)
-
     def set_element(self, slot_name, value):
         """
         Map value to javascript and attach it as element[slot_name].
@@ -999,7 +974,6 @@ class ElementCallWrapper(object):
         #for_element = self.element[self.slot_name]
         #get = ElementCallWrapper(self.widget, for_element, name)
         #get = for_element[name]
-        #return widget.execute_and_return_fragile_reference(get)
         this_ref = MethodMaker(widget.get_element(), self.slot_name)
         attr_ref = MethodMaker(this_ref, name)
         #p ("set in elementcallwrapper getattr", repr(name))
@@ -1059,7 +1033,7 @@ class FragileReference(CommandMakerSuperClass):
 
     def __call__(self, *args):
         #("fragilereference.__call__", args)
-        self.error_if_fragile_reference_is_stale()
+        #self.error_if_fragile_reference_is_stale()
         widget = self.widget
         #p ("args", args)
         args = widget.wrap_callables(args)
@@ -1335,8 +1309,6 @@ class LiteralMaker(CommandMaker):
 
 
 def quoteIfNeeded(arg):
-    #if type(arg) is FragileReference:
-    #    arg = arg.get_protected_content()
     if type(arg) in LiteralMaker.indicators:
         return LiteralMaker(arg)
     return arg
