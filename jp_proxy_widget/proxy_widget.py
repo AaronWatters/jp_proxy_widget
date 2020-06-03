@@ -303,8 +303,8 @@ class JSProxyWidget(widgets.DOMWidget):
         }
         # XXXX debug
         self._last_payload = payload
-        #pr("sending")
-        #pprint(package)
+        print("sending")
+        pprint(package)
         debug_check_commands(package)
         self.send(package)
 
@@ -908,7 +908,8 @@ class ElementWrapper(object):
         self.widget_element = for_widget.get_element()
 
     def __getattr__(self, name):
-        return ElementCallWrapper(self.widget, self.widget_element, name)
+        #return ElementCallWrapper(self.widget, self.widget_element, name)
+        return LazyGet(self.widget, self.widget_element, name)
 
     # for parallelism to _set
     _get = __getattr__
@@ -920,6 +921,7 @@ class ElementWrapper(object):
         "Proxy to set a property of the widget element."
         return self.widget(self.widget_element._set(name, value))
 
+'''
 class ElementCallWrapper(object):
     """
     Wrapper for widget.element.slot_name
@@ -956,36 +958,39 @@ class ElementCallWrapper(object):
         #mapped_args = map(self.map_value, args)
         widget = self.widget
         mapped_args = self.widget.wrap_callables(args)
+        return LazyCall
         #widget(slot(*mapped_args))
-        args = widget.wrap_callables(args)
-        call = CallMaker("method", widget.get_element(), self.slot_name, *args)
+        #args = widget.wrap_callables(args)
+        #call = CallMaker("method", widget.get_element(), self.slot_name, *args)
         #p("reset in elementcallwrapper call")
-        widget.last_attribute = None
-        setref = SetMaker(widget.get_element(), FRAGILE_JS_REFERENCE, call)
-        widget.send_command(setref)
-        reference = MethodMaker(widget.get_element(), FRAGILE_JS_REFERENCE)
-        return FragileReference(self.widget, reference, call)
+        #widget.last_attribute = None
+        #setref = SetMaker(widget.get_element(), FRAGILE_JS_REFERENCE, call)
+        #widget.send_command(setref)
+        #reference = MethodMaker(widget.get_element(), FRAGILE_JS_REFERENCE)
+        #return FragileReference(self.widget, reference, call)
 
     def __getattr__(self, name):
         assert isinstance(self.widget, JSProxyWidget)
         if name=="wrap_callables":
             raise SystemError(name)
         widget = self.widget
+        return LazyGet(widget, widget.get_element(), name)
         #for_element = self.element[self.slot_name]
         #get = ElementCallWrapper(self.widget, for_element, name)
         #get = for_element[name]
-        this_ref = MethodMaker(widget.get_element(), self.slot_name)
-        attr_ref = MethodMaker(this_ref, name)
+        #this_ref = MethodMaker(widget.get_element(), self.slot_name)
+        #attr_ref = MethodMaker(this_ref, name)
         #p ("set in elementcallwrapper getattr", repr(name))
-        self.widget.last_attribute = name
-        set_this = SetMaker(widget.get_element(), FRAGILE_THIS, this_ref)
-        set_ref = SetMaker(widget.get_element(), FRAGILE_JS_REFERENCE, attr_ref)
-        widget.send_commands([set_this, set_ref])
-        reference = MethodMaker(widget.get_element(), FRAGILE_JS_REFERENCE)
-        return FragileReference(self.widget, reference, attr_ref)
+        #self.widget.last_attribute = name
+        #set_this = SetMaker(widget.get_element(), FRAGILE_THIS, this_ref)
+        #set_ref = SetMaker(widget.get_element(), FRAGILE_JS_REFERENCE, attr_ref)
+        #widget.send_commands([set_this, set_ref])
+        #reference = MethodMaker(widget.get_element(), FRAGILE_JS_REFERENCE)
+        #return FragileReference(self.widget, reference, attr_ref)
 
     # getattr and getitem are the same in Javascript
     __getitem__ = __getattr__
+'''
 
 class StaleFragileJavascriptReference(ValueError):
     "Stale Javascript value reference"
@@ -995,6 +1000,63 @@ class CommandMakerSuperClass(object):
     Superclass for command proxy objects.
     """
     pass
+
+class LazyCommandSuperClass(CommandMakerSuperClass):
+
+    def __repr__(self):
+        return repr(self._cmd())
+
+    def __getattr__(self, attribute):
+        return LazyGet(self.for_widget, self, attribute)
+
+    def __call__(self, *args):
+        return LazyCall(self.for_widget, self, *args)
+
+    def _cmd(self):
+        raise NotImplementedError("_cmd must be defined in subclass")
+
+class LazyGet(CommandMakerSuperClass):
+
+    def __init__(self, for_widget, for_target, attribute):
+        self.for_target = for_target
+        self.for_widget = for_widget
+        self.attribute = attribute
+
+    def _cmd(self):
+        m = MethodMaker(self.for_target, self.attribute)
+        return m._cmd()
+
+    def __call__(self, *args):
+        if type(self.attribute) is str:
+            return LazyMethodCall(self.for_widget, self, self.attribute, *args)
+        else:
+            m = MethodMaker(self.for_target, self.attribute)
+            return LazyCall(self.for_widget, m, *args)
+
+class LazyCall(CommandMakerSuperClass):
+
+    def __init__(self, for_widget, for_target, *args):
+        self.for_target = for_target
+        self.for_widget = for_widget
+        args = for_widget.wrap_callables(args)
+        self.args = args
+
+    def _cmd(self):
+        c = CallMaker("function", self.for_target, *self.args)
+        return c.cmd()
+        
+class LazyMethodCall(CommandMakerSuperClass):
+
+    def __init__(self, for_widget, for_target, attribute, *args):
+        self.for_target = for_target
+        self.for_widget = for_widget
+        self.attribute = attribute
+        args = for_widget.wrap_callables(args)
+        self.args = args
+
+    def _cmd(self):
+        m = CallMaker("method", self.for_target, self.attribute, *self.args)
+        return m.cmd()
 
 class FragileReference(CommandMakerSuperClass):
 
