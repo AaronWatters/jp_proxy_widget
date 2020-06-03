@@ -404,10 +404,10 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                 var target_desc = remainder.shift();
                 var target = that.execute_command_result(target_desc);
                 var name = remainder.shift();
-                var args = remainder.map(that.execute_command_result, that);
                 // cl("method call " + target + "." + name);
                 var method = target[name];
                 if (method) {
+                    var args = remainder.map(that.execute_command_result, that);
                     result = method.apply(target, args);
                 } else {
                     result = "In " + target + " no such method " + name;
