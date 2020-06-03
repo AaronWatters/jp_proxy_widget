@@ -999,12 +999,27 @@ class CommandMakerSuperClass(object):
     """
     Superclass for command proxy objects.
     """
-    pass
+    def reference(self):
+        "return cached value if available"
+        return self # default -- not cached
 
 class LazyCommandSuperClass(CommandMakerSuperClass):
 
+    fragile_reference = "invalid"
+
     def __repr__(self):
         return repr(self._cmd())
+
+    def reference(self):
+        for_widget = self.for_widget
+        if for_widget.last_fragile_reference is self:
+            #return this.fragile_reference
+            return MethodMaker(for_widget.get_element(), FRAGILE_JS_REFERENCE
+        else:
+            return self
+
+    def this_reference(self):
+        raise ValueError, "this_reference only makes sense for Get"
 
     def __getattr__(self, attribute):
         return LazyGet(self.for_widget, self, attribute)
@@ -1015,12 +1030,21 @@ class LazyCommandSuperClass(CommandMakerSuperClass):
     def _cmd(self):
         raise NotImplementedError("_cmd must be defined in subclass")
 
-class LazyGet(CommandMakerSuperClass):
+class LazyGet(LazyCommandSuperClass):
 
     def __init__(self, for_widget, for_target, attribute):
         self.for_target = for_target
         self.for_widget = for_widget
         self.attribute = attribute
+        # when executing immediately put target ref in fragile_this and attr value in fragile_ref
+        set_this = SetMaker(for_widget.get_element(), FRAGILE_THIS, for_target.reference())
+        # get attr value as element.fragile_this.attr
+        attr_ref = MethodMaker(MethodMaker(for_widget.get_element(), FRAGILE_THIS), attribute)
+        set_ref = SetMaker(for_widget.get_element(), FRAGILE_JS_REFERENCE, attr_ref)
+        # execute immediately on init
+        for_widget.send_commands([set_this, set_ref])
+        # use fragile ref to find value, until the cached value is replaced
+        for_widget.last_fragile_reference = self
 
     def _cmd(self):
         m = MethodMaker(self.for_target, self.attribute)
@@ -1033,19 +1057,20 @@ class LazyGet(CommandMakerSuperClass):
             m = MethodMaker(self.for_target, self.attribute)
             return LazyCall(self.for_widget, m, *args)
 
-class LazyCall(CommandMakerSuperClass):
+class LazyCall(LazyCommandSuperClass):
 
     def __init__(self, for_widget, for_target, *args):
         self.for_target = for_target
         self.for_widget = for_widget
         args = for_widget.wrap_callables(args)
         self.args = args
+        # when executing immediately save result of call in this...
 
     def _cmd(self):
         c = CallMaker("function", self.for_target, *self.args)
         return c.cmd()
         
-class LazyMethodCall(CommandMakerSuperClass):
+class LazyMethodCall(LazyCommandSuperClass):
 
     def __init__(self, for_widget, for_target, attribute, *args):
         self.for_target = for_target
