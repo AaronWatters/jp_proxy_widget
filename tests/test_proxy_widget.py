@@ -548,17 +548,6 @@ class TestProxyWidget(unittest.TestCase):
         set_attribute = wrapper._set("some_attribute", "some value")
         assert widget.get_element.called
 
-    def test_element_call_wrapper(self, *args):
-        widget = proxy_widget.JSProxyWidget()
-        widget.callable = MagicMock()
-        class MockElement:
-            def __getitem__(self, item):
-                return MagicMock()
-        element = MockElement()
-        wrapper = proxy_widget.ElementCallWrapper(widget, element, "slot_name")
-        call = wrapper(1, 3, list)
-        get = wrapper.some_attribute
-
     def test_fragile_reference(self, *args):
         widget = proxy_widget.JSProxyWidget()
         class MockedReferee:
