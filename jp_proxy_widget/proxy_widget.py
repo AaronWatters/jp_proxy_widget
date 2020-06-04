@@ -283,6 +283,10 @@ class JSProxyWidget(widgets.DOMWidget):
 
     print_on_error = True
 
+    def setTimeout(self, callable, milliseconds):
+        "Convenience access to window.setTimeout in Javascript"
+        self.element.window.setTimeout(callable, milliseconds)
+
     def handle_error_msg(self, att_name, old, new):
         if self.print_on_error:
             print("new error message: " + new)
