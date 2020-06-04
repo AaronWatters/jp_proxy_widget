@@ -408,9 +408,7 @@ class JSProxyWidget(widgets.DOMWidget):
         value is a reference to the element by name.
         """
         elt = self.get_element()
-        if callable(reference):
-            # convert to javascript callback
-            reference = self.callable(reference)  # XXXX should generalize this to allow callablse of lists etc
+        reference = self.wrap_callables(reference)
         save_command = elt._set(name, reference)
         # buffer the save operation
         self(save_command)
