@@ -182,6 +182,7 @@ class JSProxyWidget(widgets.DOMWidget):
         self.count_to_results_callback = {}
         self.default_event_callback = None
         self.identifier_to_callback = {}
+        self.callable_cache = {}
         #self.callback_to_identifier = {}
         #self.on_trait_change(self.handle_callback_results, "callback_results")
         #self.on_trait_change(self.handle_results, "results")
@@ -690,6 +691,11 @@ class JSProxyWidget(widgets.DOMWidget):
         # do not double wrap CallMakers
         if isinstance(function_or_method, CallMaker):
             return function_or_method
+        # get existing wrapper value from cache, if available
+        cache = self.callable_cache
+        result = cache.get(function_or_method)
+        if result is not None:
+            return result
         data = repr(function_or_method)
         def callback_function(_data, arguments):
             count = 0
@@ -704,7 +710,9 @@ class JSProxyWidget(widgets.DOMWidget):
                 else:
                     break
             function_or_method(*py_arguments)
-        return self.callback(callback_function, data, level, delay, segmented)
+        result = self.callback(callback_function, data, level, delay, segmented)
+        cache[function_or_method] = result
+        return result
 
     def callback(self, callback_function, data, level=1, delay=False, segmented=None):
         "Create a 'proxy callback' to receive events detected by the JS View."
