@@ -962,6 +962,9 @@ class LazyCommandSuperClass(CommandMakerSuperClass):
             return "attributes mentioning _ipython are forbidden because they cause infinite recursions: " + repr(attribute)
         return LazyGet(self.for_widget, self, attribute)
 
+    def __getitem__(self, item):
+        return self.__getattr__(item)
+
     def __call__(self, *args):
         return LazyCall(self.for_widget, self, *args)
 
