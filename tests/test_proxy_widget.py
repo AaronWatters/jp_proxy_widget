@@ -548,33 +548,6 @@ class TestProxyWidget(unittest.TestCase):
         set_attribute = wrapper._set("some_attribute", "some value")
         assert widget.get_element.called
 
-    def test_fragile_reference(self, *args):
-        widget = proxy_widget.JSProxyWidget()
-        class MockedReferee:
-            called = False
-            attribute = False
-            def __call__(self, *args):
-                self.called = True
-                return args
-            def __getitem__(self, name):
-                self.attribute = True
-                return name
-        fake_referee = MockedReferee()
-        ref = proxy_widget.FragileReference(widget, fake_referee, "fake_cached")
-        # no error yet
-        content = ref.get_protected_content()
-        self.assertEqual(content, fake_referee)
-        call = ref(1,2,34)
-        #self.assertEqual((1,2,34), call)
-        attr = call["some_attribute"]
-        # coverage
-        attr._ipython_canary_method_should_not_exist_
-        #self.assertEqual("some_attribute", attr)
-        ref2 = proxy_widget.FragileReference(widget, "fake_referee2", "fake_cached2")
-        # yes error
-        with self.assertRaises(proxy_widget.StaleFragileJavascriptReference):
-            content = ref.get_protected_content()
-
     def test_command_maker(self, *args):
         m = proxy_widget.CommandMaker("window")
         exercised_methods = [
