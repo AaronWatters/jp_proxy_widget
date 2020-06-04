@@ -307,8 +307,9 @@ class JSProxyWidget(widgets.DOMWidget):
             PAYLOAD: payload,
         }
         self._last_payload = payload
-        #("sending")
-        #pp(package)
+        if self.verbose:
+            print("sending")
+            pprint(package)
         debug_check_commands(package)
         self.send(package)
 
