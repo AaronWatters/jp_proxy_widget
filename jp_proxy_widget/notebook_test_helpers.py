@@ -27,8 +27,8 @@ class ValidationSuite:
         The implementation includes a delay in the python kernel and a javascript delay
         to allow any unresolved operations in tested widgets to complete.
         """
-        print("sleeping in kernel interface...")
-        time.sleep(delay_ms / 1000.0)
+        #print("sleeping in kernel interface...")
+        #time.sleep(delay_ms / 1000.0)
         print("initializing validator widget.")
         validator_widget = jp_proxy_widget.JSProxyWidget()
 
