@@ -301,10 +301,9 @@ class JSProxyWidget(widgets.DOMWidget):
             INDICATOR: indicator,
             PAYLOAD: payload,
         }
-        # XXXX debug
         self._last_payload = payload
-        print("sending")
-        pprint(package)
+        #("sending")
+        #pp(package)
         debug_check_commands(package)
         self.send(package)
 
@@ -706,7 +705,6 @@ class JSProxyWidget(widgets.DOMWidget):
                     count += 1
                 else:
                     break
-            #p("XXXXX callback args", py_arguments)
             function_or_method(*py_arguments)
         return self.callback(callback_function, data, level, delay, segmented)
 
@@ -761,9 +759,6 @@ class JSProxyWidget(widgets.DOMWidget):
         return CommandMaker("window")
 
     def load_js_files(self, filenames, force=True, local=True):
-        #  xxxx  Use that.$$el.test_js_loaded to only load the module if needed when force is False
-        #import js_context
-        #js_context.load_if_not_loaded(self, filenames, verbose=verbose, delay=delay, force=force, local=local)
         for filepath in filenames:
             def load_the_file(filepath=filepath):
                 # pr ("loading " + filepath)
@@ -795,9 +790,7 @@ class JSProxyWidget(widgets.DOMWidget):
     def validate_command(self, command, top=True):
         # convert CommandMaker to list format.
         if isinstance(command, CommandMakerSuperClass):
-            #p("XXXXX CONVERTING COMMAND MAKER", type(command), command)
             command = command._cmd()
-            #p("XXXXX CONVERTed COMMAND MAKER", type(command), command)
         elif callable(command):
             # otherwise convert callables to callbacks, in list format
             command = self.callable(command)._cmd()
@@ -816,7 +809,6 @@ class JSProxyWidget(widgets.DOMWidget):
                 assert type(name) is str, "method name must be a string " + repr(name)
                 args = self.validate_commands(args, top=False)
                 remainder = [target, name] + args
-                #p("XXXX validated method remainder", remainder)
             elif indicator == "function":
                 target = remainder[0]
                 args = remainder[1:]
@@ -1014,14 +1006,20 @@ class LazyCommandSuperClass(CommandMakerSuperClass):
         for_widget = self.for_widget
         if for_widget.last_fragile_reference is self:
             #return this.fragile_reference
-            return MethodMaker(for_widget.get_element(), FRAGILE_JS_REFERENCE
+            return MethodMaker(for_widget.get_element(), FRAGILE_JS_REFERENCE)
         else:
             return self
 
     def this_reference(self):
-        raise ValueError, "this_reference only makes sense for Get"
+        raise ValueError("this_reference only makes sense for Get")
+
+    def javascript(self, *args):
+        raise NotImplementedError("don't convert lazy commands to javascript for now.")
+        #return repr("Javascript disabled for lazy commands: " + repr(type(self)))
 
     def __getattr__(self, attribute):
+        if '_ipython' in attribute:
+            return "attributes mentioning _ipython are forbidden because they cause infinite recursions: " + repr(attribute)
         return LazyGet(self.for_widget, self, attribute)
 
     def __call__(self, *args):
@@ -1052,10 +1050,18 @@ class LazyGet(LazyCommandSuperClass):
 
     def __call__(self, *args):
         if type(self.attribute) is str:
-            return LazyMethodCall(self.for_widget, self, self.attribute, *args)
+            return LazyMethodCall(self.for_widget, self, *args)
         else:
             m = MethodMaker(self.for_target, self.attribute)
             return LazyCall(self.for_widget, m, *args)
+
+    def this_reference(self):
+        for_widget = self.for_widget
+        if for_widget.last_fragile_reference is self:
+            #return this.fragile_reference
+            return MethodMaker(for_widget.get_element(), FRAGILE_THIS)
+        else:
+            return self.for_target
 
 class LazyCall(LazyCommandSuperClass):
 
@@ -1064,7 +1070,14 @@ class LazyCall(LazyCommandSuperClass):
         self.for_widget = for_widget
         args = for_widget.wrap_callables(args)
         self.args = args
-        # when executing immediately save result of call in this...
+        # when executing immediately save result of call in fragile_ref
+        set_ref = SetMaker(
+            for_widget.get_element(),
+            FRAGILE_JS_REFERENCE,
+            CallMaker("function", self.for_target.reference(), *args)
+        )
+        for_widget.send_commands([set_ref])
+        for_widget.last_fragile_reference = self
 
     def _cmd(self):
         c = CallMaker("function", self.for_target, *self.args)
@@ -1072,16 +1085,24 @@ class LazyCall(LazyCommandSuperClass):
         
 class LazyMethodCall(LazyCommandSuperClass):
 
-    def __init__(self, for_widget, for_target, attribute, *args):
-        self.for_target = for_target
+    def __init__(self, for_widget, for_method, *args):
+        self.for_method = for_method
         self.for_widget = for_widget
-        self.attribute = attribute
         args = for_widget.wrap_callables(args)
         self.args = args
+        # when executing immediately save result of call in fragile_ref
+        set_ref = SetMaker(
+            for_widget.get_element(),
+            FRAGILE_JS_REFERENCE,
+            CallMaker("method", for_method.this_reference(), for_method.attribute, *args)
+        )
+        for_widget.send_commands([set_ref])
+        for_widget.last_fragile_reference = self
 
     def _cmd(self):
-        m = CallMaker("method", self.for_target, self.attribute, *self.args)
-        return m.cmd()
+        for_method = self.for_method
+        m = CallMaker("method", for_method.for_target, for_method.attribute, *self.args)
+        return m._cmd()
 
 class FragileReference(CommandMakerSuperClass):
 
@@ -1183,7 +1204,8 @@ class CommandMaker(CommandMakerSuperClass):
         self.name = name
 
     def __repr__(self):
-        return self.javascript()
+        #return self.javascript()
+        return repr(type(self)) + "::" + repr(id(self))   # disable informative reprs for now
 
     def javascript(self, level=0):
         "Return javascript text intended for this command"
@@ -1241,7 +1263,6 @@ class SetMaker(CommandMaker):
         self.target = target
         self.name = name
         self.value = value
-        ##p ("XXXX initialized setmaker: " + self.javascript())
 
     def javascript(self, level=0):
         innerlevel = 2
