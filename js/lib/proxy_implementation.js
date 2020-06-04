@@ -294,7 +294,9 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         } else {
             results.push("no commands sent?");
         }
-        that.send_custom_message(that.RESULTS, [command_counter, results])
+        //that.send_custom_message(that.RESULTS, [command_counter, results])
+        // disable sending results for now (not used)
+        that.send_custom_message(that.RESULTS, [command_counter, true])
         return results;
     },
 
@@ -334,7 +336,9 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             } else {
                 // evaluation complete: send results
                 // cl(command_counter + " execute commands done " + results.length);
-                that.send_custom_message(that.RESULTS, [command_counter, results])
+                //that.send_custom_message(that.RESULTS, [command_counter, results])
+                // disable sending results for now (not used)
+                that.send_custom_message(that.RESULTS, [command_counter, true]) 
                 return results
             }
         } catch (err) {
@@ -649,8 +653,9 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             cursor = next_cursor;
             that.send_custom_message(frag_indicator, fragment);
         }
-        var tail = json_str.substring(cursor, json_len);
-        that.send_custom_message(final_indicator, tail);
+        //var tail = json_str.substring(cursor, json_len);
+        //that.send_custom_message(final_indicator, tail);
+        that.send_custom_message(final_indicator, true);  // disable command results for now (not used)
     },
 
     to_hex: function(int8) {
