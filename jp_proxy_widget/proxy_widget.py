@@ -924,7 +924,13 @@ class ElementWrapper(object):
 
     def _set(self, name, value):
         "Proxy to set a property of the widget element."
-        return self.widget(self.widget_element._set(name, value))
+        #return self.widget(self.widget_element._set(name, value))
+        ref = value
+        if isinstance(value, CommandMakerSuperClass):
+            ref = value.reference()
+        command = SetMaker(self.widget_element, name, ref)
+        self.widget.send_commands([command])
+        return LazyGet(self.widget, self.widget_element, name)
 
 class StaleFragileJavascriptReference(ValueError):
     "Stale Javascript value reference"
@@ -972,6 +978,12 @@ class LazyCommandSuperClass(CommandMakerSuperClass):
 
     def _cmd(self):
         raise NotImplementedError("_cmd must be defined in subclass")
+
+    def method(self, name):
+        def result(*args):
+            f = getattr(self, name)
+            return f(*args)
+        return result
 
 class LazyGet(LazyCommandSuperClass):
 
