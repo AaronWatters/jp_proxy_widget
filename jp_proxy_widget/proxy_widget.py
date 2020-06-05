@@ -153,8 +153,8 @@ class JSProxyWidget(widgets.DOMWidget):
     _model_name = Unicode('JSProxyModel').tag(sync=True)
     _view_module = Unicode('jp_proxy_widget').tag(sync=True)
     _model_module = Unicode('jp_proxy_widget').tag(sync=True)
-    _view_module_version = Unicode('^1.0.4').tag(sync=True)
-    _model_module_version = Unicode('^1.0.4').tag(sync=True)
+    _view_module_version = Unicode('^1.0.5').tag(sync=True)
+    _model_module_version = Unicode('^1.0.5').tag(sync=True)
 
     # traitlet port to use for sending commands to javascript
     #commands = traitlets.List([], sync=True)
