@@ -419,7 +419,7 @@ class JSProxyWidget(widgets.DOMWidget):
         # buffer the save operation
         self(save_command)
         # return the reference by name
-        return getattr(elt, name)
+        return getattr(self.element, name)
 
     _jqueryUI_checked = False
 
@@ -912,6 +912,8 @@ class ElementWrapper(object):
 
     def __getattr__(self, name):
         #return ElementCallWrapper(self.widget, self.widget_element, name)
+        if name == '_ipython_canary_method_should_not_exist_':
+            return 42  # ipython poking around...
         return LazyGet(self.widget, self.widget_element, name)
 
     # for parallelism to _set
