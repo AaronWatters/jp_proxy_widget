@@ -14,6 +14,7 @@ Update _version.py (set release version, remove 'dev').
 Also bump the version information in 
 
 ```
+jp_proxy_widget/_version.py
 js/package.json
 js/lib/proxy_implementation.js
 jp_proxy_widget/proxy_widget.py
@@ -21,21 +22,29 @@ jp_proxy_widget/proxy_widget.py
 
 git add the _version.py file and git commit.
 
+```
+git add jp_proxy_widget/_version.py
+git add js/package.json
+git add js/lib/proxy_implementation.js
+git add jp_proxy_widget/proxy_widget.py
+git commit -m "new release"
+
+git tag -a X.X.X -m 'comment'
+git push
+git push --tags
+```
+
+Upload to `pip`
+
 `python setup.py sdist upload`
 
 `python setup.py bdist_wheel upload`
-
-`git tag -a X.X.X -m 'comment'`
-
-Update _version.py (add 'dev' and increment minor)
-git add and git commit
-git push
-git push --tags
 
 - To release a new version of jp_proxy_widget on NPM:
 
 ```
 # clean out the `dist` and `node_modules` directories
+cd js
 git clean -fdx
 npm install
 npm publish
