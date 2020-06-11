@@ -182,6 +182,20 @@ class TestProxyWidget(unittest.TestCase):
         with self.assertRaises(ValueError):
             widget.flush()
 
+    def test_delay_flush(self):
+        widget = proxy_widget.JSProxyWidget()
+        m = widget.send_commands = MagicMock()
+        widget.rendered = True
+        widget.flush()
+        assert m.called
+        m = widget.send_commands = MagicMock()
+        with widget.delay_flush():
+            widget.element.do_something_in_javascript()
+            assert not m.called
+            assert len(widget.buffered_commands) > 0
+        assert m.called
+        assert len(widget.buffered_commands) == 0
+        
     @patch("jp_proxy_widget.proxy_widget.JSProxyWidget.__call__")
     def test_save(self, mc):
         class dummy_elt:
@@ -651,6 +665,20 @@ class TestProxyWidget(unittest.TestCase):
         for unwrapped in all + [all]:
             wrapped = widget.wrap_callables(unwrapped)
             self.assertEqual(wrapped, unwrapped)
+
+    def test_cmd_str(self, *args):
+        s = "a string"
+        L = proxy_widget.LiteralMaker(s)
+        self.assertEqual(L._cmd(), s)
+
+    def test_lazy_get(self, *args):
+        widget = proxy_widget.JSProxyWidget()
+        get = widget.element["AnyAttribute"]
+        method_call = get("called")
+        self.assertIsInstance(method_call, proxy_widget.LazyMethodCall)
+        call_attribute = method_call["someOtherAttribute"]
+        self.assertIsInstance(call_attribute, proxy_widget.LazyGet)
+        self.assertIsInstance(repr(call_attribute), str)  # exercise the repr method
 
 class RequireMockElement:
     "Used for mocking the element when testing loading requirejs"

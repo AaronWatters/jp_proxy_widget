@@ -297,6 +297,7 @@ class JSProxyWidget(widgets.DOMWidget):
             #if self.commands_awaiting_render:
                 #self.send_commands([])
             if self.auto_flush:
+                #("xxxx flushing on render")
                 self.flush()
             self.status= "Rendered."
         except Exception as e:
