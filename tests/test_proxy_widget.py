@@ -64,19 +64,22 @@ class TestProxyWidget(unittest.TestCase):
     #@patch("proxy_widget.JSProxyWidget.send_commands")
     def test_handle_rendered(self):
         widget = proxy_widget.JSProxyWidget()
-        widget.commands_awaiting_render = ["bogus"]
+        #widget.commands_awaiting_render = ["bogus"]
+        widget.buffered_commands = ["bogus"]
         m = widget.send_commands = MagicMock()
-        widget.handle_rendered("att", "old", "new")
+        #widget.handle_rendered("att", "old", "new")
+        widget.rendered = True
         assert m.called
         self.assertEqual(widget.status, "Rendered.")
     
     #@patch("proxy_widget.JSProxyWidget.send_commands")
     def test_handle_rendered_error(self):
         widget = proxy_widget.JSProxyWidget()
-        widget.commands_awaiting_render = ["bogus"]
+        widget.buffered_commands = ["bogus"]
         m = widget.send_commands = MagicMock(side_effect=KeyError('foo'))
         with self.assertRaises(KeyError):
-            widget.handle_rendered("att", "old", "new")
+            #widget.handle_rendered("att", "old", "new")
+            widget.rendered = True
         assert m.called
         #self.assertEqual(widget.status, "Rendered.")
 
@@ -171,7 +174,13 @@ class TestProxyWidget(unittest.TestCase):
         widget = proxy_widget.JSProxyWidget()
         m = widget.send_commands = MagicMock()
         widget.flush()
+        assert not m.called
+        widget.rendered = True
+        widget.flush()
         assert m.called
+        widget.error_on_flush = True
+        with self.assertRaises(ValueError):
+            widget.flush()
 
     @patch("jp_proxy_widget.proxy_widget.JSProxyWidget.__call__")
     def test_save(self, mc):
@@ -359,10 +368,10 @@ class TestProxyWidget(unittest.TestCase):
         widget.rendered = False
         command = [1,2,3]
         cb = MagicMock()
-        before = len(widget.commands_awaiting_render)
+        before = len(widget.buffered_commands)
         widget.send_command(command, cb)
         assert not cb.called
-        assert len(widget.commands_awaiting_render) == before + 1
+        assert len(widget.buffered_commands) == before + 1
         return widget
 
     def test_send_command_after_rendered(self, *args):
@@ -372,7 +381,7 @@ class TestProxyWidget(unittest.TestCase):
         cb = MagicMock()
         s = widget.send_custom_message = MagicMock()
         widget.send_command(command, cb)
-        assert widget.commands_awaiting_render is None
+        assert not widget.buffered_commands
         assert not cb.called
         assert s.called
 
@@ -383,7 +392,7 @@ class TestProxyWidget(unittest.TestCase):
         cb = MagicMock()
         s = widget.send_segmented_message = MagicMock()
         widget.send_commands([command], cb, segmented=1000)
-        assert widget.commands_awaiting_render is None
+        assert not widget.buffered_commands
         assert not cb.called
         assert s.called
 
@@ -394,6 +403,8 @@ class TestProxyWidget(unittest.TestCase):
         widget.send_segmented_message("frag", "final", payload, 100)
         assert s.called
 
+
+    """
     def test_evaluate(self, *args):
         payload = list(range(1000))
         widget = proxy_widget.JSProxyWidget()
@@ -421,7 +432,7 @@ class TestProxyWidget(unittest.TestCase):
         proxy_widget.ip.kernel.do_one_iteration = do_one_iteration
         values = widget.evaluate_commands(commands)
         assert test.called
-        self.assertEqual(results_in, values)
+        self.assertEqual(results_in, values)"""
 
     @patch("jp_proxy_widget.proxy_widget.ip")
     def test_evaluate_commands_timeout(self, *args):

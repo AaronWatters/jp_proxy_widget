@@ -191,7 +191,7 @@ class JSProxyWidget(widgets.DOMWidget):
         ##pr "registered on_msg(handle_custom_message)"
         self.on_msg(self.handle_custom_message_wrapper)
         self.buffered_commands = []
-        self.commands_awaiting_render = []
+        #self.commands_awaiting_render = []
         self.last_commands_sent = []
         self.last_callback_results = None
         self.results = []
@@ -294,8 +294,10 @@ class JSProxyWidget(widgets.DOMWidget):
     def handle_rendered(self, att_name, old, new):
         "when rendered send any commands awaiting the render event."
         try:
-            if self.commands_awaiting_render:
-                self.send_commands([])
+            #if self.commands_awaiting_render:
+                #self.send_commands([])
+            if self.auto_flush:
+                self.flush()
             self.status= "Rendered."
         except Exception as e:
             self.error_msg = repr(e)
@@ -388,21 +390,37 @@ class JSProxyWidget(widgets.DOMWidget):
         return prefix + str(IDENTITY_COUNTER[0])
 
     def __call__(self, command):
+        "Send command convenience."
+        return self.buffer_command(command)
+
+    def buffer_command(self, command):
         "Add a command to the buffered commands. Convenience."
-        #self.buffered_commands.append(command)
-        self.send_command(command)
+        self.buffer_commands([command])
+        return command
+
+    def buffer_commands(self, commands):
+        self.buffered_commands.extend(commands)
         if self.auto_flush:
             self.flush()
-        return command
+        return commands
 
     def seg_flush(self, results_callback=None, level=1, segmented=BIG_SEGMENT):
         "flush a potentially large command sequence, segmented."
         return self.flush(results_callback, level, segmented)
 
+    error_on_flush = False  # Primarily for debugging
+
     def flush(self, results_callback=None, level=1, segmented=None):
         "send the buffered commands and clear the buffer. Convenience."
+        if not self.rendered:
+            #("XXXX not flushing before render", len(self.buffered_commands))
+            self.status = "deferring flush until render"
+            return None
+        if self.error_on_flush:
+            raise ValueError("flush is disabled")
         commands = self.buffered_commands
         self.buffered_commands = []
+        #("XXXXX now flushing", len(commands))
         result = self.send_commands(commands, results_callback, level, segmented=segmented)
         self._send_counter += 1
         return result
@@ -618,10 +636,13 @@ class JSProxyWidget(widgets.DOMWidget):
         if check:
             debug_check_commands(commands)
         if self.rendered:
-            # also send any commands awaiting the render event.
-            if self.commands_awaiting_render:
-                commands = commands + self.commands_awaiting_render
-                self.commands_awaiting_render = None
+            # also send buffered commands
+            #if self.commands_awaiting_render:
+            #    commands = commands + self.commands_awaiting_render
+            #    self.commands_awaiting_render = None
+            if self.buffered_commands:
+                commands = self.buffered_commands + commands
+                self.buffered_commands = []
             payload = [count, commands, level]
             if results_callback is not None:
                 self.identifier_to_callback[count] = results_callback
@@ -636,7 +657,8 @@ class JSProxyWidget(widgets.DOMWidget):
         else:
             # wait for render event before sending commands.
             ##pr "waiting for render!", commands
-            self.commands_awaiting_render.extend(commands)
+            #self.commands_awaiting_render.extend(commands)
+            self.buffered_commands.extend(commands)
             return ("awaiting render", commands)
 
     def send_segmented_message(self, frag_ind, final_ind, payload, segmented):
@@ -654,6 +676,7 @@ class JSProxyWidget(widgets.DOMWidget):
         json_tail = json_str[cursor:]
         self.send_custom_message(final_ind, json_tail)
     
+    """ # doesn't work: not used.
     def evaluate(self, command, level=1, timeout=3000):
         "Send one command and wait for result.  Return result."
         results = self.evaluate_commands([command], level, timeout)
@@ -677,6 +700,7 @@ class JSProxyWidget(widgets.DOMWidget):
                 raise Exception("Timeout waiting for command results: " + repr(timeout))
             ip.kernel.do_one_iteration()
         return result_list[0]
+    """
 
     def seg_callback(self, callback_function, data, level=1, delay=False, segmented=BIG_SEGMENT):
         """
@@ -866,6 +890,18 @@ class JSProxyWidget(widgets.DOMWidget):
         # Non-lists are untranslated (but should be JSON compatible).
         return command
 
+    def delay_flush(self):
+        """
+        Context manager to group a large number of operations into one message.
+        This can prevent flooding messages over the ZMQ communications link between
+        the Javascript front end and the Python kernel backend.
+
+        >>> with widget.delay_flush():
+        ...    many_operations(widget)
+        ...    even_more_operations(widget)
+        """
+        return DisableFlushContextManager(self)
+
 def indent_string(s, level, indent="    "):
     lindent = indent * level
     return s.replace("\n", "\n" + lindent)
@@ -892,6 +928,30 @@ def to_javascript(thing, level=0, indent=None, comma=","):
         result = indent_string(json_value, level)
     assert type(result) is str, repr((thing, result))
     return result
+
+
+# Adapted from jp_doodle.dual_canvas.DisableRedrawContextManager
+
+class DisableFlushContextManager(object):
+    """
+    Temporarily disable flushes and also collect widget messages into a single group.
+    This can speed up widget interactions and prevent the communication channel from flooding.
+    """
+
+    def __init__(self, canvas):
+        self.canvas = canvas
+        self.save_flush = canvas.auto_flush
+
+    def __enter__(self):
+        canvas = self.canvas
+        self.save_flush = canvas.auto_flush
+        canvas.auto_flush = False
+
+    def __exit__(self, type, value, traceback):
+        canvas = self.canvas
+        canvas.auto_flush = self.save_flush
+        if (self.save_flush):
+            canvas.flush()
 
 
 class ElementWrapper(object):
@@ -929,7 +989,7 @@ class ElementWrapper(object):
         if isinstance(value, CommandMakerSuperClass):
             ref = value.reference()
         command = SetMaker(self.widget_element, name, ref)
-        self.widget.send_commands([command])
+        self.widget.buffer_commands([command])
         return LazyGet(self.widget, self.widget_element, name)
 
 class StaleFragileJavascriptReference(ValueError):
@@ -997,7 +1057,7 @@ class LazyGet(LazyCommandSuperClass):
         attr_ref = MethodMaker(MethodMaker(for_widget.get_element(), FRAGILE_THIS), attribute)
         set_ref = SetMaker(for_widget.get_element(), FRAGILE_JS_REFERENCE, attr_ref)
         # execute immediately on init
-        for_widget.send_commands([set_this, set_ref])
+        for_widget.buffer_commands([set_this, set_ref])
         # use fragile ref to find value, until the cached value is replaced
         for_widget.last_fragile_reference = self
 
@@ -1033,7 +1093,7 @@ class LazyCall(LazyCommandSuperClass):
             FRAGILE_JS_REFERENCE,
             CallMaker("function", self.for_target.reference(), *args)
         )
-        for_widget.send_commands([set_ref])
+        for_widget.buffer_commands([set_ref])
         for_widget.last_fragile_reference = self
 
     def _cmd(self):
@@ -1053,7 +1113,7 @@ class LazyMethodCall(LazyCommandSuperClass):
             FRAGILE_JS_REFERENCE,
             CallMaker("method", for_method.this_reference(), for_method.attribute, *args)
         )
-        for_widget.send_commands([set_ref])
+        for_widget.buffer_commands([set_ref])
         for_widget.last_fragile_reference = self
 
     def _cmd(self):
