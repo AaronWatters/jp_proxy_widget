@@ -6,7 +6,7 @@ To test the underlying functionality, use the end_to_end_tests.
 
 To run the tests in the parent directory:
 
-$ nosetests --with-coverage --cover-html-dir=coverage --cover-xml --cover-package=jp_proxy_widget
+$ nosetests --with-coverage --cover-html-dir=coverage --cover-xml --cover-package=jp_proxy_widget --cover-html
 
 To view the HTML report from the parent directory:
 

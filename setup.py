@@ -141,6 +141,8 @@ setup_args = {
     'install_requires': [
         'ipywidgets>=7.0.0',
         "requests",
+        "numpy",
+        "jupyter-ui-poll",
     ],
     'packages': find_packages(),
     'zip_safe': False,

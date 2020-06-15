@@ -448,7 +448,7 @@ class TestProxyWidget(unittest.TestCase):
         assert test.called
         self.assertEqual(results_in, values)"""
 
-    @patch("jp_proxy_widget.proxy_widget.ip")
+    #@patch("jp_proxy_widget.proxy_widget.ip")
     def test_evaluate_commands_timeout(self, *args):
         commands = list(range(100))
         results_in = [33]
@@ -462,9 +462,9 @@ class TestProxyWidget(unittest.TestCase):
         def do_one_iteration():
             callback[0](results_in)
             test()
-        proxy_widget.ip = MagicMock()
-        proxy_widget.ip.kernel = MagicMock()
-        proxy_widget.ip.kernel.do_one_iteration = do_one_iteration
+        #proxy_widget.ip = MagicMock()
+        #proxy_widget.ip.kernel = MagicMock()
+        #proxy_widget.ip.kernel.do_one_iteration = do_one_iteration
         with self.assertRaises(Exception):
             values = widget.evaluate_commands(commands, timeout=-1)
 
@@ -679,6 +679,15 @@ class TestProxyWidget(unittest.TestCase):
         call_attribute = method_call["someOtherAttribute"]
         self.assertIsInstance(call_attribute, proxy_widget.LazyGet)
         self.assertIsInstance(repr(call_attribute), str)  # exercise the repr method
+
+    def test_clean_dict(self, *args):
+        import numpy as np
+        A = np.array([1.1, 2.2], dtype=np.float32)
+        a1 = A[1]
+        assert type(a1) is not float
+        D = proxy_widget.clean_dict(tuple=(1,2,3), array=A, np_float=a1, missing=None)
+        self.assertEqual(D, dict(tuple=[1,2,3], array=A.tolist(), np_float=float(a1)))
+        self.assertEqual(type(D["np_float"]), float)
 
 class RequireMockElement:
     "Used for mocking the element when testing loading requirejs"

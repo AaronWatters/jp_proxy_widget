@@ -115,10 +115,11 @@ import traceback
 from . import js_context
 from .hex_codec import hex_to_bytearray, bytearray_to_hex
 from pprint import pprint
+import numpy as np
 
 # In the IPython context get_ipython is a builtin.
 # get a reference to the IPython notebook object.
-ip = IPython.get_ipython()
+#ip = IPython.get_ipython()   # not used
 
 # For creating unique DOM identities
 IDENTITY_COUNTER = [int(time.time() * 100) % 10000000]
@@ -1027,7 +1028,7 @@ class LazyCommandSuperClass(CommandMakerSuperClass):
         #return repr("Javascript disabled for lazy commands: " + repr(type(self)))
 
     def __getattr__(self, attribute):
-        if '_ipython' in attribute:
+        if type(attribute) is str and '_ipython' in attribute:
             return "attributes mentioning _ipython are forbidden because they cause infinite recursions: " + repr(attribute)
         return LazyGet(self.for_widget, self, attribute)
 
@@ -1362,7 +1363,6 @@ class InvalidCommand(Exception):
     "Invalid command"
 
 
-
 def debug_check_commands(command):
     "raise an error if the command is not a basic json structure"
     if command is None:
@@ -1379,3 +1379,23 @@ def debug_check_commands(command):
         return debug_check_commands(list(command.items()))
     # otherwise
     raise InvalidCommand(repr(command))
+
+
+
+def clean_dict(**kwargs):
+    "Like dict but with no None values and make some values JSON serializable."
+    # This function is generally useful for passing information to proxy widgets
+    result = {}
+    for kw in kwargs:
+        v = kwargs[kw]
+        if v is not None:
+            if isinstance(v, np.ndarray):
+                # listiffy arrays -- maybe should be done elsewhere
+                v = v.tolist()
+            if isinstance(v, np.floating):
+                v = float(v)
+            if type(v) is tuple:
+                v = list(v)
+            result[kw] = v
+    return result
+
