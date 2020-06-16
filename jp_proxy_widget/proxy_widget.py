@@ -312,6 +312,15 @@ class JSProxyWidget(widgets.DOMWidget):
         "Convenience access to window.setTimeout in Javascript"
         self.element.window.setTimeout(callable, milliseconds)
 
+    def on_rendered(self, callable, *positional, **keyword):
+        """
+        After the widget has rendered, call the callable using the provided arguments.
+        This can be used to initialize an animation after the widget is visible, for example.
+        """
+        def call_it():
+            return callable(*positional, **keyword)
+        self.js_init("call_it();", call_it=call_it)
+
     def handle_error_msg(self, att_name, old, new):
         if self.print_on_error:
             print("new error message: " + new)
