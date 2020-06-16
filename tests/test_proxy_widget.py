@@ -719,6 +719,22 @@ class TestProxyWidget(unittest.TestCase):
         widget.on_rendered(m, "some", "arguments")
         assert m.called
 
+    def test_in_dialog(self, *args):
+        widget = proxy_widget.JSProxyWidget()
+        m = MagicMock()
+        widget.element.dialog = m
+        widget.in_dialog(
+            title="A Counter",
+            autoOpen=False,
+            buttons=dict(Increment=MagicMock()),
+            height=150,
+            width=600,
+            modal=True,
+            show=dict(effect="blind", duration=1000),
+            hide=dict(effect="fade", duration=1000),
+        )
+        assert m.called
+
 class RequireMockElement:
     "Used for mocking the element when testing loading requirejs"
     require_is_loaded = False
