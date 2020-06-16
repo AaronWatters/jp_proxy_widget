@@ -710,6 +710,15 @@ class TestProxyWidget(unittest.TestCase):
         with self.assertRaises(proxy_widget.JavascriptException):
             get_value = widget.element["AnyAttribute"].sync_value(ms_delay=10)
 
+    def test_on_rendered(self, *args):
+        widget = proxy_widget.JSProxyWidget()
+        def fake_js_init(js, call_it):
+            call_it()
+        widget.js_init = fake_js_init
+        m = MagicMock()
+        widget.on_rendered(m, "some", "arguments")
+        assert m.called
+
 class RequireMockElement:
     "Used for mocking the element when testing loading requirejs"
     require_is_loaded = False
