@@ -116,6 +116,7 @@ from . import js_context
 from .hex_codec import hex_to_bytearray, bytearray_to_hex
 from pprint import pprint
 import numpy as np
+from jupyter_ui_poll import run_ui_poll_loop
 
 # In the IPython context get_ipython is a builtin.
 # get a reference to the IPython notebook object.
@@ -144,8 +145,14 @@ FRAGILE_JS_REFERENCE = "_FRAGILE_JS_REFERENCE"
 # Reference used for method resolution
 FRAGILE_THIS = "_FRAGILE_THIS"
 
+SEND_FRAGILE_JS_REFERENCE = "_SEND_FRAGILE_JS_REFERENCE"
+
 # Message segmentation size default
 BIG_SEGMENT = 1000000
+
+class SyncTimeOutError(RuntimeError):
+    "The sync operation between the kernel and Javascript timed out."
+
 
 @widgets.register
 class JSProxyWidget(widgets.DOMWidget):
@@ -205,8 +212,21 @@ class JSProxyWidget(widgets.DOMWidget):
         self.js_init("""
             // make the window accessible through the element
             element.window = window;
+
+            // Initialize caching slots.
             element._FRAGILE_THIS = null;
-        """)
+            element._FRAGILE_JS_REFERENCE = null;
+
+            // The following is used for sending synchronous values.
+            element._SEND_FRAGILE_JS_REFERENCE = function() {
+                // xxxxx add a delay to allow the Python side to be ready for the response (???)
+                var ref = element._FRAGILE_JS_REFERENCE;
+                var delayed = function () {
+                    RECEIVE_FRAGILE_REFERENCE(ref);
+                };
+                setTimeout(delayed, 100);
+            };
+        """, RECEIVE_FRAGILE_REFERENCE=self._RECEIVE_FRAGILE_REFERENCE)
 
     def set_element(self, slot_name, value):
         """
@@ -677,6 +697,50 @@ class JSProxyWidget(widgets.DOMWidget):
             cursor = next_cursor
         json_tail = json_str[cursor:]
         self.send_custom_message(final_ind, json_tail)
+
+    _synced_command_result = None
+    _synced_command_evaluated = False
+    _synced_command_timed_out = False
+    _synced_command_timeout_time = None
+
+    def evaluate(self, command, level=3, timeout=3000):
+        "Evaluate the command and return the converted javascript value."
+        self._synced_command_result = None
+        self._synced_command_timed_out = False
+        self._synced_command_evaluated = False
+        self._synced_command_timeout_time = None
+        start = time.time()
+        if timeout is not None and timeout > 0:
+            self._synced_command_timeout_time = start + timeout
+        start = self._synced_command_start_time = time.time()
+        self._send_synced_command(command, level)
+        run_ui_poll_loop(self._sync_complete)
+        if self._synced_command_timed_out:
+            raise TimeoutError("wait: %s, started: %s; gave up %s" % (timeout, start, time.time()))
+        assert self._synced_command_evaluated, repr((self._synced_command_evaluated, self._synced_command_result))
+        return self._synced_command_result
+
+    def _send_synced_command(self, command, level):
+        if self.last_fragile_reference is not command:
+            set_ref = SetMaker(self.get_element(), FRAGILE_JS_REFERENCE, command)
+            self.buffer_command(set_ref)
+        #self.element._SEND_FRAGILE_JS_REFERENCE()
+        get_ref = CallMaker("method", self.get_element(), SEND_FRAGILE_JS_REFERENCE)
+        self.buffer_command(get_ref)
+        self.flush()
+
+    def _RECEIVE_FRAGILE_REFERENCE(self, value):
+        self._synced_command_result = value
+        self._synced_command_evaluated = True
+
+    def _sync_complete(self):
+        if self._synced_command_timeout_time is not None:
+            self._synced_command_timed_out = (time.time() > self._synced_command_timeout_time)
+        test = self._synced_command_evaluated or self._synced_command_timed_out
+        if test:
+            return test
+        else:
+            return None  # only None signals end of polling loop.
     
     """ # doesn't work: not used.
     def evaluate(self, command, level=1, timeout=3000):
@@ -1046,6 +1110,15 @@ class LazyCommandSuperClass(CommandMakerSuperClass):
             f = getattr(self, name)
             return f(*args)
         return result
+
+    def sync_value(self, timeout=3000, level=3):
+        """
+        Return the converted javascript-side value for this command.
+        """
+        for_widget = self.for_widget
+        for_widget.evaluate(self, timeout=timeout, level=level)
+        return for_widget._synced_command_result
+
 
 class LazyGet(LazyCommandSuperClass):
 
