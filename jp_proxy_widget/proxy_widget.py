@@ -221,13 +221,14 @@ class JSProxyWidget(widgets.DOMWidget):
             element._FRAGILE_JS_REFERENCE = null;
 
             // The following is used for sending synchronous values.
-            element._SEND_FRAGILE_JS_REFERENCE = function() {
+            element._SEND_FRAGILE_JS_REFERENCE = function(ms_delay) {
                 // xxxxx add a delay to allow the Python side to be ready for the response (???)
+                ms_delay = ms_delay || 100;
                 var ref = element._FRAGILE_JS_REFERENCE;
                 var delayed = function () {
                     RECEIVE_FRAGILE_REFERENCE(ref);
                 };
-                setTimeout(delayed, 100);
+                setTimeout(delayed, ms_delay);
             };
         """, RECEIVE_FRAGILE_REFERENCE=self._RECEIVE_FRAGILE_REFERENCE)
 
@@ -706,7 +707,7 @@ class JSProxyWidget(widgets.DOMWidget):
     _synced_command_timed_out = False
     _synced_command_timeout_time = None
 
-    def evaluate(self, command, level=3, timeout=3000):
+    def evaluate(self, command, level=3, timeout=3000, ms_delay=100):
         "Evaluate the command and return the converted javascript value."
         # temporarily disable error prints
         print_on_error = self.print_on_error
@@ -723,7 +724,7 @@ class JSProxyWidget(widgets.DOMWidget):
             if timeout is not None and timeout > 0:
                 self._synced_command_timeout_time = start + timeout
             start = self._synced_command_start_time = time.time()
-            self._send_synced_command(command, level)
+            self._send_synced_command(command, level, ms_delay=ms_delay)
             run_ui_poll_loop(self._sync_complete)
             if self._synced_command_timed_out:
                 raise TimeoutError("wait: %s, started: %s; gave up %s" % (timeout, start, time.time()))
@@ -741,12 +742,12 @@ class JSProxyWidget(widgets.DOMWidget):
             self.error_msg = old_err
             self.print_on_error = print_on_error
 
-    def _send_synced_command(self, command, level):
+    def _send_synced_command(self, command, level, ms_delay=100):
         if self.last_fragile_reference is not command:
             set_ref = SetMaker(self.get_element(), FRAGILE_JS_REFERENCE, command)
             self.buffer_command(set_ref)
         #self.element._SEND_FRAGILE_JS_REFERENCE()
-        get_ref = CallMaker("method", self.get_element(), SEND_FRAGILE_JS_REFERENCE)
+        get_ref = CallMaker("method", self.get_element(), SEND_FRAGILE_JS_REFERENCE, ms_delay)
         self.buffer_command(get_ref)
         self.flush()
 
@@ -1132,12 +1133,12 @@ class LazyCommandSuperClass(CommandMakerSuperClass):
             return f(*args)
         return result
 
-    def sync_value(self, timeout=3000, level=3):
+    def sync_value(self, timeout=3000, level=3, ms_delay=100):
         """
         Return the converted javascript-side value for this command.
         """
         for_widget = self.for_widget
-        for_widget.evaluate(self, timeout=timeout, level=level)
+        for_widget.evaluate(self, timeout=timeout, level=level, ms_delay=ms_delay)
         return for_widget._synced_command_result
 
 
