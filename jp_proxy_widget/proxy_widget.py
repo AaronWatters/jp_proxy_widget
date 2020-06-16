@@ -491,6 +491,31 @@ class JSProxyWidget(widgets.DOMWidget):
         if onsuccess:
             onsuccess()
 
+    def in_dialog(
+            self,
+            title="",
+            autoOpen=True,
+            buttons=None,  # dict of label to callback
+            height="auto",
+            width=300,
+            modal=False,
+            **other_options,
+        ):
+        """
+        Pop the widget into a floating jQueryUI dialog. See https://api.jqueryui.com/1.9/dialog
+        """
+        self.check_jquery()
+        options = clean_dict(
+            title=title,
+            autoOpen=autoOpen,
+            buttons=buttons,
+            height=height,
+            width=width,
+            modal=modal,
+            **other_options,
+            )
+        self.element.dialog(options)
+
     _require_checked = False
     _needs_requirejs = False
     _delayed_require_actions = None
