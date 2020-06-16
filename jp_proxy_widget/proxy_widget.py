@@ -153,6 +153,9 @@ BIG_SEGMENT = 1000000
 class SyncTimeOutError(RuntimeError):
     "The sync operation between the kernel and Javascript timed out."
 
+class JavascriptException(ValueError):
+    "The sync operation caused an exception in the Javascript interpreter."
+
 
 @widgets.register
 class JSProxyWidget(widgets.DOMWidget):
@@ -705,20 +708,38 @@ class JSProxyWidget(widgets.DOMWidget):
 
     def evaluate(self, command, level=3, timeout=3000):
         "Evaluate the command and return the converted javascript value."
-        self._synced_command_result = None
-        self._synced_command_timed_out = False
-        self._synced_command_evaluated = False
-        self._synced_command_timeout_time = None
-        start = time.time()
-        if timeout is not None and timeout > 0:
-            self._synced_command_timeout_time = start + timeout
-        start = self._synced_command_start_time = time.time()
-        self._send_synced_command(command, level)
-        run_ui_poll_loop(self._sync_complete)
-        if self._synced_command_timed_out:
-            raise TimeoutError("wait: %s, started: %s; gave up %s" % (timeout, start, time.time()))
-        assert self._synced_command_evaluated, repr((self._synced_command_evaluated, self._synced_command_result))
-        return self._synced_command_result
+        # temporarily disable error prints
+        print_on_error = self.print_on_error
+        old_err = self.error_msg
+        try:
+            # Note: if the command buffer has not been flushed other operations may set the error_msg
+            self.print_on_error = False
+            self.error_msg = ""
+            self._synced_command_result = None
+            self._synced_command_timed_out = False
+            self._synced_command_evaluated = False
+            self._synced_command_timeout_time = None
+            start = time.time()
+            if timeout is not None and timeout > 0:
+                self._synced_command_timeout_time = start + timeout
+            start = self._synced_command_start_time = time.time()
+            self._send_synced_command(command, level)
+            run_ui_poll_loop(self._sync_complete)
+            if self._synced_command_timed_out:
+                raise TimeoutError("wait: %s, started: %s; gave up %s" % (timeout, start, time.time()))
+            assert self._synced_command_evaluated, repr((self._synced_command_evaluated, self._synced_command_result))
+            error_msg = self.error_msg
+            result = self._synced_command_result
+            if error_msg:
+                if error_msg == result:
+                    raise JavascriptException("sync error: " + repr(error_msg))
+                else:
+                    old_err = error_msg
+            return result
+        finally:
+            # restore error prints if formerly enabled
+            self.error_msg = old_err
+            self.print_on_error = print_on_error
 
     def _send_synced_command(self, command, level):
         if self.last_fragile_reference is not command:
