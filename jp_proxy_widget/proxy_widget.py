@@ -347,7 +347,7 @@ class JSProxyWidget(widgets.DOMWidget):
         if self.verbose:
             print("sending")
             pprint(package)
-        debug_check_commands(package)
+        #debug_check_commands(package)
         self.send(package)
 
     # slot for last message data debugging

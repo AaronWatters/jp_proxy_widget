@@ -318,7 +318,9 @@ var JSProxyView = widgets.DOMWidgetView.extend({
                     break;
                 } else {
                     // store result now and proceed
-                    results[i] = that.json_safe(result, level);
+                    //results[i] = that.json_safe(result, level);
+                    // disable return results for now.
+                    results[i] = true;
                 }
             }
             if (evaluator) {
