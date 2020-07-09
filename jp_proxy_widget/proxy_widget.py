@@ -230,7 +230,7 @@ class JSProxyWidget(widgets.DOMWidget):
                 };
                 setTimeout(delayed, ms_delay);
             };
-        """, RECEIVE_FRAGILE_REFERENCE=self._RECEIVE_FRAGILE_REFERENCE)
+        """, RECEIVE_FRAGILE_REFERENCE=self._RECEIVE_FRAGILE_REFERENCE, callable_level=5)
 
     def set_element(self, slot_name, value):
         """
@@ -293,6 +293,22 @@ class JSProxyWidget(widgets.DOMWidget):
             action()
 
     def wrap_callables(self, x, callable_level=3):
+        def wrapit(x):
+            if callable(x) and not isinstance(x, CommandMakerSuperClass):
+                return self.callable(x, level=callable_level)
+            # otherwise
+            ty = type(x)
+            if ty is list:
+                return list(wrapit(y) for y in x)
+            if ty is tuple:
+                return tuple(wrapit(y) for y in x)
+            if ty is dict:
+                return dict((k, wrapit(v)) for (k,v) in x.items())
+            # default
+            return x
+        return wrapit(x)
+
+    def wrap_callables0(self, x, callable_level=3):
         if callable(x) and not isinstance(x, CommandMakerSuperClass):
             return self.callable(x, level=callable_level)
         w = self.wrap_callables
