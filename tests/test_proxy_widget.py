@@ -735,6 +735,33 @@ class TestProxyWidget(unittest.TestCase):
         )
         assert m.called
 
+    def test_quote_numpy_array(self, *args):
+        import numpy as np
+        a = np.array([1, 2, 3], dtype=np.int)
+        q = proxy_widget.quoteIfNeeded(a)
+        c = q._cmd()
+        c2 = proxy_widget.quoteIfNeeded([1,2,3])._cmd()
+        self.assertEqual(c, c2)
+
+    def test_quote_numpy_array_in_dict(self, *args):
+        import numpy as np
+        widget = proxy_widget.JSProxyWidget()
+        a = {"array": np.array([1, 2, 3], dtype=np.int), "string": "whatever"}
+        b = {"array": [1, 2, 3], "string": "whatever"}
+        ca = widget.validate_command(proxy_widget.quoteIfNeeded(a))
+        cb = widget.validate_command(proxy_widget.quoteIfNeeded(b))
+        self.assertEqual(ca, cb)
+
+    def test_quote_numpy_array_elt(self, *args):
+        import numpy as np
+        a = np.array([1, 2, 3], dtype=np.int)
+        a1 = a[1] # numpy int
+        b1 = 2  # standard int
+        self.assertNotEqual(type(a1), type(b1))
+        q = proxy_widget.quoteIfNeeded(a1)
+        self.assertEqual(type(q), type(b1))
+        self.assertEqual(q, b1)
+
 class RequireMockElement:
     "Used for mocking the element when testing loading requirejs"
     require_is_loaded = False

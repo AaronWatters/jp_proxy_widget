@@ -1454,11 +1454,29 @@ class CallMaker(CommandMaker):
         return [self.kind] + self.args #+ validate_commands(self.args, False)
 
 
+def np_array_to_list(a):
+    return a.tolist()
+
+
 class LiteralMaker(CommandMaker):
     """
     Proxy to make a literal dictionary or list which may contain other
     proxy references.
     """
+
+    translators = {
+        np.ndarray: np_array_to_list,
+        np.float: float,
+        np.float128: float,
+        np.float16: float,
+        np.float32: float,
+        np.float64: float,
+        np.int: int,
+        np.int0: int,
+        np.int16: int,
+        np.int32: int,
+        np.int64: int,
+    }
 
     indicators = {
         # things we can translate
@@ -1479,7 +1497,7 @@ class LiteralMaker(CommandMaker):
     def _cmd(self):
         thing = self.thing
         ty = type(thing)
-        indicator = self.indicators.get(type(thing))
+        indicator = self.indicators.get(ty)
         #return [indicator, thing]
         if indicator:
             # exact type equality here:
@@ -1495,7 +1513,12 @@ class LiteralMaker(CommandMaker):
 
 
 def quoteIfNeeded(arg):
-    if type(arg) in LiteralMaker.indicators:
+    ty = type(arg)
+    translator = LiteralMaker.translators.get(ty)
+    if translator:
+        arg = translator(arg)
+        ty = type(arg)
+    if ty in LiteralMaker.indicators:
         return LiteralMaker(arg)
     return arg
 
