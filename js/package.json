@@ -1,6 +1,6 @@
 {
   "name": "jp_proxy_widget",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Generic Jupyter/IPython widget implementation that will support many types of javascript libraries and interactions.",
   "author": "Aaron Watters",
   "main": "lib/index.js",
