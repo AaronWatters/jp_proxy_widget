@@ -1466,17 +1466,25 @@ class LiteralMaker(CommandMaker):
 
     translators = {
         np.ndarray: np_array_to_list,
-        np.float: float,
-        np.float128: float,
-        np.float16: float,
-        np.float32: float,
-        np.float64: float,
-        np.int: int,
-        np.int0: int,
-        np.int16: int,
-        np.int32: int,
-        np.int64: int,
+        #np.float: float,
+        #np.float128: float,
+        #np.float16: float,
+        #np.float32: float,
+        #np.float64: float,
+        #np.int: int,
+        #np.int0: int,
+        #np.int16: int,
+        #np.int32: int,
+        #np.int64: int,
     }
+    for type_name in "float float128 float16 float32 float64".split():
+        if hasattr(np, type_name):
+            ty = getattr(np, type_name)
+            translators[ty] = float
+    for type_name in "int int0 int16 int32 int64".split():
+        if hasattr(np, type_name):
+            ty = getattr(np, type_name)
+            translators[ty] = int
 
     indicators = {
         # things we can translate
