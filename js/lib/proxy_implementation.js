@@ -66,6 +66,10 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         that.$$el.jQuery = jquery_;
         that.$$el._ = _;
 
+        Jupyter.notebook.events.on("kernel_ready.Kernel",function() {
+            that.clear_global_state(jquery_);
+        });
+
         // trigger callbacks if vanilla javascript modules have/have not been loaded.
         // no-op callbacks can be falsy.
         that.$$el.test_js_loaded = function(names, is_loaded_callback, not_loaded_callback, silent) {
@@ -239,6 +243,16 @@ var JSProxyView = widgets.DOMWidgetView.extend({
 
         that.model.set("rendered", true);
         that.touch();
+    },
+
+    clear_global_state: function(jq) {
+        console.log("Clearing jp_proxy_widget global state");
+        // Clear any global state here
+        var that = this;
+
+        that.loaded_js_by_name = {};
+        // get rid of all nodes that were loaded via jp-proxy-widget
+        jq("[data-jp-proxy-widget-node]").each(function(idx,e){e.remove();});
     },
 
     set_error_msg: function(message) {
@@ -505,6 +519,7 @@ var JSProxyView = widgets.DOMWidgetView.extend({
             .prop("type", "text/css")
             //.prop("title", css_name)
             .prop("href", css_name)
+            .attr("data-jp-proxy-widget-node","1")
             .html("\n"+css_text)
             .appendTo("head");
             // loop a while waiting for the stylesheet to appear.
