@@ -99,3 +99,7 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+jp_proxy_widget/static
+js/node_modules
+js/package-lock.json
