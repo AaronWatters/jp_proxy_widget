@@ -66,9 +66,11 @@ var JSProxyView = widgets.DOMWidgetView.extend({
         that.$$el.jQuery = jquery_;
         that.$$el._ = _;
 
-        Jupyter.notebook.events.on("kernel_ready.Kernel",function() {
-            that.clear_global_state(jquery_);
-        });
+        if (window.Jupyter ) {
+            Jupyter.notebook.events.on("kernel_ready.Kernel",function() {
+                that.clear_global_state(jquery_);
+            });
+        }
 
         // trigger callbacks if vanilla javascript modules have/have not been loaded.
         // no-op callbacks can be falsy.
