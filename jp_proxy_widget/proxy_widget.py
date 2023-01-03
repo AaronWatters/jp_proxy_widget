@@ -1466,12 +1466,10 @@ class LiteralMaker(CommandMaker):
 
     translators = {
         np.ndarray: np_array_to_list,
-        #np.float: float,
         #np.float128: float,
         #np.float16: float,
         #np.float32: float,
         #np.float64: float,
-        #np.int: int,
         #np.int0: int,
         #np.int16: int,
         #np.int32: int,
