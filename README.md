@@ -1,4 +1,7 @@
 
+WARNING: This project no longer works with recent versions of Jupyter and there is no current plan to fix it
+============================================================================================================
+
 [![Binder](https://mybinder.org/badge.svg)](https://mybinder.org/v2/gh/AaronWatters/jp_proxy_widget/master)
 [![Build Status](https://travis-ci.org/AaronWatters/jp_proxy_widget.svg?branch=master)](https://travis-ci.org/AaronWatters/jp_proxy_widget)
 
