@@ -9,6 +9,7 @@ import os
 from IPython.display import display, Javascript, HTML
 import time
 import requests
+import io
 
 # If files are not found try to look relative to the module location
 my_dir = os.path.dirname(__file__)
@@ -46,7 +47,7 @@ def get_text_from_file_name(filename, local=True):
     else:
         path = get_file_path(filename, local)
         LOADED_FILES.add(path)
-        result = open(path).read()
+        result = io.open(path, mode="r", encoding="utf-8").read() # issue reading utf8 files in windows
     if type(result) == bytes:
         result = unicode(result, "utf8")
     return result
